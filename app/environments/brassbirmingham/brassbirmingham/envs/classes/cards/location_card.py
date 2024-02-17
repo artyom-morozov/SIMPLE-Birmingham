@@ -1,16 +1,38 @@
-from consts import *
 from python.print_colors import (prCyan, prGreen, prLightGray, prPurple, prRed,
                                  prYellow)
 
 from .card import Card
 from .enums import CardName, CardType
-
+# towns
+LEEK = "Leek"
+STOKE_ON_TRENT = "Stoke-On-Trent"
+STONE = "Stone"
+CANNOCK = "Cannock"
+UTTOXETER = "Uttoxeter"
+BELPER = "Belper"
+DERBY = "Derby"
+STAFFORD = "Stafford"
+BURTON_UPON_TRENT = "Burton-Upon-Trent"
+BEER1 = "beer1"
+TAMWORTH = "Tamworth"
+WALSALL = "Walsall"
+DUDLEY = "Dudley"
+WORCESTER = "Worcester"
+COALBROOKDALE = "Coalbrookdale"
+WOLVERHAMPTON = "Wolverhampton"
+KIDDERMINSTER = "Kidderminster"
+BEER2 = "beer2"
+BIRMINGHAM = "Birmingham"
+NUNEATON = "Nuneaton"
+COVENTRY = "Coventry"
+REDDITCH = "Redditch"
 
 class LocationCard(Card):
     def __init__(self, name: CardName, isWild=False):
         super(LocationCard, self).__init__(CardType.location, name=name)
         self.isWild = isWild
         self.isWild = name == CardName.wild_location
+        self.name = name
 
     def __str__(self) -> str:
         if self.isWild:

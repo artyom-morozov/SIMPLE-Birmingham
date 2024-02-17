@@ -44,6 +44,10 @@ class Board:
         self.ironMarketRemaining = MAX_MARKET_IRON - 2  # iron market missing 1
         self.roadLocations = copy.deepcopy(ROAD_LOCATIONS)
         self.players: List[Player] = []  # array of Player objects
+        
+        # Iron Buildings that have Iron Resource on them 
+        self.ironBuildings = set()
+        self.coalBuildings = set()
 
         for town in self.towns:
             town.addBoard(self)  # ref board to towns
@@ -487,6 +491,7 @@ class Board:
 
     """
     getAvailableBeerBuildingsTradePosts
+    TODO: Remove this dumbass function
     
     :param player: player inquiring
     :param town: town where beer is required

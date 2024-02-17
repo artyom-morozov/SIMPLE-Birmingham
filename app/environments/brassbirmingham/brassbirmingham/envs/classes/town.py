@@ -53,6 +53,14 @@ class Town:
     def addRoadLocation(self, roadLocation: RoadLocation):
         roadLocation.addTown(self)
         self.networks.append(roadLocation)
+    
+    # get Available canals to build
+    def getAvailableCanals(self)  -> List[RoadLocation]:
+        return [rLocation for rLocation in self.networks if rLocation.isBuilt == False and rLocation.canBuildCanal == True ]
+        
+    # get Available railroads to build
+    def getAvailableRailroads(self)  -> List[RoadLocation]:
+        return [rLocation for rLocation in self.networks if rLocation.isBuilt == False and rLocation.canBuildRailroad == True ]
 
     def getNetworkVictoryPoints(self):
         networkVP = 0

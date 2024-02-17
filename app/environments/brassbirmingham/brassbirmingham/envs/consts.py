@@ -303,7 +303,7 @@ ROAD_LOCATIONS: List[RoadLocation] = [
     RoadLocation([WOLVERHAMPTON, DUDLEY]),
     RoadLocation([TAMWORTH, WALSALL], False),
     RoadLocation([TAMWORTH, NUNEATON]),
-    RoadLocation([NUNEATON, COVENTRY]),
+    RoadLocation([NUNEATON, COVENTRY], False),
     RoadLocation([BIRMINGHAM, WALSALL]),
     RoadLocation([BIRMINGHAM, TAMWORTH]),
     RoadLocation([BIRMINGHAM, NUNEATON], False),

@@ -34,7 +34,7 @@ class Test(unittest.TestCase):
         self.resetGame(2)
 
     # test decks, hand, cards
-    def testStartingValues(self):
+    def testAvailableeNetworks(self):
         self.assertEqual(
             len(self.board.deck.cards),
             40 - 2 * STARTING_HAND_SIZE,
@@ -330,7 +330,7 @@ class Test(unittest.TestCase):
             self.assertEqual(tradepost.beerAmount, tradepost.startingBeerAmount)
 
         self.assertEqual(self.board.era, Era.railroad)
-
+        
     def testRailroads(self):
         self.resetGame(2)
         redditch:Building = self.board.townDict["Redditch"]
@@ -382,7 +382,7 @@ class Test(unittest.TestCase):
         self.assertEqual(self.p1.canBuildBuilding(self.p1.buildingDict["beer 2"], self.board.townDict[UTTOXETER].buildLocations[0]), True)
         self.p1.buildBuilding(self.p1.buildingDict["beer 2"], self.board.townDict[UTTOXETER].buildLocations[0])
         
-        render(self.board)
+        # render(self.board)
 
 
 

@@ -1,6 +1,7 @@
 from __future__ import annotations
+from collections import defaultdict
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, List, Set
 
 if TYPE_CHECKING:
     from .board import Board
@@ -25,6 +26,7 @@ from .build_location import BuildLocation
 from .buildings.building import Building
 from .buildings.market_building import MarketBuilding
 from .road_location import RoadLocation
+from .town import Town
 
 PLAYER_COLORS = ["Red", "Blue", "Green", "Yellow"]
 
@@ -51,6 +53,48 @@ class Player:
 
         for building in self.buildings:
             self.buildingDict[f"{building.name.value} {building.tier}"] = building
+
+        
+        self.industryMat = defaultdict(list)
+
+        self.initIndustryMat()
+
+
+
+        # reference to all RoadLocations that are preseent on the board by this player
+        # TODO: Add to it after building 
+        # TODO: Clear when changing era
+        self.currentNetworks: Set[RoadLocation] = set()
+
+
+
+        # reference to all buildings that are preseent on the board by this player
+        # TODO: Add to it after building 
+        # TODO: Clear when changing era
+        # TODO: Remove buillding when overbuilding
+        self.currentBuildings: Set[Building] = set()
+
+
+        self.currentTowns: Set[Town] = set()
+
+    def initIndustryMat(self):
+        for building in self.buildings:
+            self.industryMat[building.name].append(building)
+        
+        for ind in self.industryMat.keys():
+            self.industryMat[ind].sort(key=lambda b: b.tier, reverse=True)
+
+
+
+    """
+    getters 
+    """
+    def getCurrentNetworks(self) -> Set[RoadLocation]:
+        return self.currentBuildings
+
+    def getCurrentBuildings(self) -> Set[Building]:
+        return self.currentBuildings
+
 
     """
     pay - use instead of 'player.money -= amount' since this asserts no negative values
@@ -241,11 +285,11 @@ class Player:
                     if buildLocation_.building and buildLocation_.building.owner.id == self.id:
                         return False
 
-        print(
-            self.canAffordBuildingIndustryResources(
-                buildLocation, building
-            ), self.canAffordBuilding(building), self.canPlaceBuilding(building, buildLocation), building.owner == self
-        )
+        # print(
+        #     self.canAffordBuildingIndustryResources(
+        #         buildLocation, building
+        #     ), self.canAffordBuilding(building), self.canPlaceBuilding(building, buildLocation), building.owner == self
+        # )
         return (
             self.canAffordBuildingIndustryResources(
                 buildLocation, building
@@ -310,7 +354,7 @@ class Player:
     def canScout(self, additionalDiscard: Card) -> bool:
         ownership = False
         for card in self.hand.cards:
-            if card.name in [CardName.wild_location, CardName.wild_industry]:
+            if card.isWild:
                 # No scouting if player has at least 1 wild card already
                 return False
             if card.id == additionalDiscard.id:
@@ -323,6 +367,152 @@ class Player:
         return True
 
     """Actions"""
+    
+    # Get a list off all available road locations where a road could be build
+    def getAvailableNetworks(self) -> Set[RoadLocation]:
+        
+        isRailEra = self.board.era == Era.railroad
+        
+        # Has buildings
+        potentialRoads: Set[RoadLocation] = set()
+        
+        # First network verification.
+        # If no networks or builddings built can build a road anywhere
+        if len(self.currentNetworks) == 0 and len(self.currentBuildings) == 0:
+            
+            for rLocation in self.board.roadLocations:
+                if rLocation.isBuilt == True or (self.board.era == Era.canal and  rLocation.canBuildCanal == False) or (self.board.era == Era.railroad and rLocation.canBuildRailroad == False):
+                    continue
+
+                potentialRoads.add(rLocation)
+
+            return potentialRoads
+
+       
+    
+        for t in self.currentTowns:           
+            # Get all available roadLocations from each town in the network
+            availableBuildingRoads: List[RoadLocation] = t.getAvailableRailroads() if isRailEra else t.getAvailableCanals()
+            potentialRoads.update(availableBuildingRoads)
+
+        # Get connected roads
+        for network in self.currentNetworks:
+            # print('Exploring network', network)
+            for t in network.towns:
+                # print('Exploring town', t)
+                if t in self.currentTowns:
+                    continue
+                availableBuildingRoads: List[RoadLocation] = t.getAvailableRailroads() if isRailEra else t.getAvailableCanals()
+                # print('Available Networks from this town', availableBuildingRoads)
+
+                potentialRoads.update(availableBuildingRoads)
+        
+        
+            
+        return potentialRoads
+
+    # Based on Location Cards, Industry Cards, Available Builds from the mat
+    def getAvailableLocationCardBuilds(self, card: LocationCard):
+
+        # set of tuples (building, buildLocation) indicating possible  builds 
+        builds = set()
+
+        if not isinstance(card, LocationCard):
+            return builds
+
+        firstBuildings = []
+        for k in self.industryMat.keys():
+            if len(self.industryMat[k]) > 0:
+                firstBuildings.append(self.industryMat[k][-1])
+        
+        # TODO: Return all unoccupied towns if wild 
+        if card.isWild:
+            for b in firstBuildings: 
+                for t in self.board.towns:
+                    for bl in t.buildLocations:
+                        if self.canBuildBuilding(b, bl):
+                            builds.add((b, bl))
+            return builds
+
+        town: Town = self.board.townDict[card.name]
+
+        availableBuildLocations = [bl for bl in town.buildLocations]
+        
+        for b in firstBuildings:
+            for bl in availableBuildLocations:
+                if self.canBuildBuilding(b, bl):
+                    builds.add((b, bl))
+        
+        return builds
+    
+    # Based on Location Cards, Industry Cards, Available Builds from the mat
+    def getAvailableIndustryCardBuilds(self, card: IndustryCard):
+
+        # set of tuples (building, buildLocation) indicating possible  builds 
+        builds = set()
+
+        if not isinstance(card, IndustryCard):
+            return builds
+
+        # print('Getting available industry card builds. Industry is ', card.name)
+
+        firstBuildings = []
+        
+        for buildName in card.getBuildNames():
+            if len(self.industryMat[buildName]) > 0:
+                firstBuildings.append(self.industryMat[buildName][-1])
+
+        # print('First buildings are now', firstBuildings)
+        availableBuildLocations = set()
+        
+        # First rounds nothing on board
+        if len(self.currentBuildings) < 1 and len(self.currentNetworks) < 1:
+            for t in self.board.towns:
+                for bl in t.buildLocations:
+                      for bname in card.getBuildNames():
+                                if bname in bl.possibleBuilds:
+                                    availableBuildLocations.add(bl)
+
+
+        for b in self.currentBuildings:
+            if b.town and isinstance(b.town, Town):
+                for bl in b.town.buildLocations:
+                    for bname in card.getBuildNames():
+                                if bname in bl.possibleBuilds:
+                                    availableBuildLocations.add(bl)
+
+        for rl in self.currentNetworks:
+            for t in rl.towns:
+                if isinstance(t, Town):
+                    for bl in t.buildLocations:
+                        for bname in card.getBuildNames():
+                                if bname in bl.possibleBuilds:
+                                    availableBuildLocations.add(bl)
+
+        # print('Availablee Build locations after going through current network', availableBuildLocations)
+
+        for b in firstBuildings:
+            for bl in availableBuildLocations:
+                if self.canBuildBuilding(b, bl):
+                    # print('Building ', b)
+                    # print('BuildLocation', bl)
+                    builds.add((b, bl))
+
+        return builds
+
+    def getAvailableBuilds(self):
+        builds = set()
+        for card in self.hand.cards:
+            if isinstance(card, LocationCard):
+                builds.update(self.getAvailableLocationCardBuilds(card))
+            elif isinstance(card, IndustryCard):
+                builds.update(self.getAvailableIndustryCardBuilds(card))
+        return builds
+
+    # Get a list of available actions rn
+    def getAvailableActions(self):
+        pass
+
     # todo player discarding for actions
     # 1 BUILD
     def buildBuilding(self, building: Building, buildLocation: BuildLocation):
@@ -333,27 +523,38 @@ class Player:
             buildLocation.building.isRetired = True
         building.build(buildLocation)
         self.board.buildBuilding(building, buildLocation, self)
+        self.currentBuildings.add(building)
+        self.industryMat[building.name].pop(-1)
+        self.currentTowns.add(building.town)
 
     # 2 NETWORK
     def buildCanal(self, roadLocation: RoadLocation):
         assert self.canBuildCanal(roadLocation)
         self.board.buildCanal(roadLocation, self)
+        self.currentNetworks.add(roadLocation)
 
     def buildOneRailroad(self, roadLocation: RoadLocation):
         assert self.canBuildOneRailroad(roadLocation)
         self.board.buildOneRailroad(roadLocation, self)
+        self.currentNetworks.add(roadLocation)
 
     def buildTwoRailroads(
         self, roadLocation1: RoadLocation, roadLocation2: RoadLocation
     ):
         assert self.canBuildTwoRailroads(roadLocation1, roadLocation2)
         self.board.buildTwoRailroads(roadLocation1, roadLocation2, self)
+        self.currentNetworks.add(roadLocation1, roadLocation2)
+
 
     # 3 DEVELOP
     def develop(self, building1: Building, building2: Building):
         assert self.canDevelop(building1, building2)
         building1.isRetired = True
         building2.isRetired = True
+
+        self.industryMat[building1.name].pop(-1)
+        self.industryMat[building2.name].pop(-1)
+
 
     # 4 SELL
     def sell(self, building: MarketBuilding):
@@ -367,11 +568,13 @@ class Player:
         self.money += 30
 
     # 6 SCOUT
-    def scout(self, additionalDiscard: Card):
+    def scout(self, additionalDiscard: Card, card1: Card, card2: Card):
         assert self.canScout(additionalDiscard)
         self.hand.add(LocationCard(name=CardName.wild_location))
         self.hand.add(IndustryCard(name=CardName.wild_industry))
         self.hand.spendCard(additionalDiscard)
+        self.hand.spendCard(card1)
+        self.hand.spendCard(card2)
 
     # 7 PASS
     def passTurn(self):

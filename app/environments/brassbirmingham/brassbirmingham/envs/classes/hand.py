@@ -40,3 +40,5 @@ class Hand:
 
     def __repr__(self):
         return self.cards
+    def __str__(self):
+        return str(self.cards)

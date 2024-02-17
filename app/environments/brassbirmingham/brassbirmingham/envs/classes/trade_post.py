@@ -43,6 +43,14 @@ class TradePost:
         self.canDevelop = canDevelop
         self.networks: List[RoadLocation] = []
 
+    # get Available canals to build
+    def getAvailableCanals(self)  -> List[RoadLocation]:
+        return [rLocation for rLocation in self.networks if rLocation.isBuilt == False]
+        
+    # get Available railroads to build
+    def getAvailableRailroads(self)  -> List[RoadLocation]:
+        return [rLocation for rLocation in self.networks if rLocation.isBuilt == False]
+
     """
     addMerchantTile
     game init use only
