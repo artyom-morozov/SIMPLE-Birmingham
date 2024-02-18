@@ -352,6 +352,9 @@ class Player:
 
     # 6 SCOUT
     def canScout(self, additionalDiscard: Card) -> bool:
+        if len(self.board.wildIndustryCards) < 1 and len(self.board.wildlocationCards) < 1:
+            return False
+
         ownership = False
         for card in self.hand.cards:
             if card.isWild:
@@ -513,10 +516,34 @@ class Player:
     def getAvailableActions(self):
         pass
 
+    def isCardInHand(self, card: Card):
+        return card.id in [_card.id for _card in self.hand.cards]
+
     # todo player discarding for actions
     # 1 BUILD
-    def buildBuilding(self, building: Building, buildLocation: BuildLocation):
+    def buildBuilding(self, building: Building, buildLocation: BuildLocation, card: Card):
+        assert building == self.industryMat[building.name][-1]
+        assert self.isCardInHand(card)
         assert self.canBuildBuilding(building, buildLocation)
+        if isinstance(card, LocationCard):
+            assert card.name == buildLocation.town.name
+            if card.isWild:
+                self.board.wildlocationCards.append(card)
+                self.hand.cards = list(
+                    filter(lambda x: x.id != card.id, self.hand.cards)
+                )  
+            else:
+                self.hand.spendCard(card)
+
+        if isinstance(card, IndustryCard):
+            assert building.name in card.getBuildNames()
+            if card.isWild:
+                self.board.wildIndustryCards.append(card)
+                self.hand.cards = list(
+                    filter(lambda x: x.id != card.id, self.hand.cards)
+                )  
+            else:
+                self.hand.spendCard(card)
         # if overbuilding
         if buildLocation.building:
             buildLocation.building.isActive = False
@@ -526,59 +553,78 @@ class Player:
         self.currentBuildings.add(building)
         self.industryMat[building.name].pop(-1)
         self.currentTowns.add(building.town)
+        
 
     # 2 NETWORK
-    def buildCanal(self, roadLocation: RoadLocation):
+    def buildCanal(self, roadLocation: RoadLocation, discard: Card):
+        assert self.isCardInHand(discard)
         assert self.canBuildCanal(roadLocation)
         self.board.buildCanal(roadLocation, self)
         self.currentNetworks.add(roadLocation)
+        self.hand.spendCard(discard)
 
-    def buildOneRailroad(self, roadLocation: RoadLocation):
+    def buildOneRailroad(self, roadLocation: RoadLocation, discard: Card):
+        assert self.isCardInHand(discard)
         assert self.canBuildOneRailroad(roadLocation)
         self.board.buildOneRailroad(roadLocation, self)
         self.currentNetworks.add(roadLocation)
+        self.hand.spendCard(discard)
 
     def buildTwoRailroads(
-        self, roadLocation1: RoadLocation, roadLocation2: RoadLocation
+        self, roadLocation1: RoadLocation, roadLocation2: RoadLocation, discard: Card
     ):
+        assert self.isCardInHand(discard)
         assert self.canBuildTwoRailroads(roadLocation1, roadLocation2)
         self.board.buildTwoRailroads(roadLocation1, roadLocation2, self)
         self.currentNetworks.add(roadLocation1, roadLocation2)
+        self.hand.spendCard(discard)
 
 
     # 3 DEVELOP
-    def develop(self, building1: Building, building2: Building):
+    def develop(self, building1: Building, building2: Building, discard: Card):
+        assert self.isCardInHand(discard)
         assert self.canDevelop(building1, building2)
         building1.isRetired = True
         building2.isRetired = True
 
         self.industryMat[building1.name].pop(-1)
         self.industryMat[building2.name].pop(-1)
+        self.hand.spendCard(discard)
 
 
     # 4 SELL
-    def sell(self, building: MarketBuilding):
+    def sell(self, building: MarketBuilding, discard: Card):
+        assert self.isCardInHand(discard)
         assert self.canSell(building)
         self.board.sellBuilding(building, self)
+        self.hand.spendCard(discard)
+
 
     # 5 LOAN
-    def loan(self):
+    def loan(self, discard: Card):
+        assert self.isCardInHand(discard)
         assert self.canLoan()
         self.decreaseIncomeLevel(3)
         self.money += 30
+        self.hand.spendCard(discard)
 
     # 6 SCOUT
     def scout(self, additionalDiscard: Card, card1: Card, card2: Card):
+        assert self.isCardInHand(additionalDiscard)
+        assert self.isCardInHand(card1)
+        assert self.isCardInHand(card2)
         assert self.canScout(additionalDiscard)
-        self.hand.add(LocationCard(name=CardName.wild_location))
-        self.hand.add(IndustryCard(name=CardName.wild_industry))
+        self.hand.add(self.board.wildlocationCards.pop(0))
+        self.hand.add(self.board.wildIndustryCards.pop(0))
         self.hand.spendCard(additionalDiscard)
         self.hand.spendCard(card1)
         self.hand.spendCard(card2)
 
     # 7 PASS
-    def passTurn(self):
+    def passTurn(self, discard: Card):
+        assert self.isCardInHand(discard)
         assert self.canPassTurn()
+        self.hand.spendCard(discard)
         return
 
     def __repr__(self) -> str:

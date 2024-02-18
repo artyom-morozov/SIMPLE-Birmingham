@@ -2,6 +2,9 @@ from __future__ import annotations
 
 import copy
 from typing import TYPE_CHECKING, Dict, List
+from app.environments.brassbirmingham.brassbirmingham.envs.classes.cards.enums import CardName
+from app.environments.brassbirmingham.brassbirmingham.envs.classes.cards.industry_card import IndustryCard
+from app.environments.brassbirmingham.brassbirmingham.envs.classes.cards.location_card import LocationCard
 
 from consts import (CANAL_PRICE, MAX_MARKET_COAL, MAX_MARKET_IRON,
                     ONE_RAILROAD_COAL_PRICE, ONE_RAILROAD_PRICE,
@@ -45,6 +48,9 @@ class Board:
         self.roadLocations = copy.deepcopy(ROAD_LOCATIONS)
         self.players: List[Player] = []  # array of Player objects
         
+        self.wildIndustryCards = [IndustryCard(name=CardName.wild_industry), IndustryCard(name=CardName.wild_industry)]
+        self.wildlocationCards = [LocationCard(name=CardName.wild_location), LocationCard(name=CardName.wild_location)]
+
         # Iron Buildings that have Iron Resource on them 
         self.ironBuildings = set()
         self.coalBuildings = set()
