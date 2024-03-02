@@ -33,7 +33,7 @@ class MarketBuilding(Building):
         networkPoints: int,
         canBeDeveloped=True,
         onlyPhaseOne=False,
-        onlyPhaseTwo=False,
+        onlyPhaseTwo=False, 
     ):
         super(MarketBuilding, self).__init__(
             BuildingType.market,
@@ -51,7 +51,9 @@ class MarketBuilding(Building):
         )
         self.beerCost = beerCost
 
+    
     def sell(self):
+        self.owner.income += self.incomeGained
         self.isActive = False
         self.isSold = True
         self.town = None

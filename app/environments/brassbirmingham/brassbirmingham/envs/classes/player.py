@@ -1,7 +1,9 @@
 from __future__ import annotations
-from collections import defaultdict
+from collections import defaultdict, deque
 
-from typing import TYPE_CHECKING, List, Set
+from typing import TYPE_CHECKING, List, Set, Tuple
+
+from .buildings.industry_building import IndustryBuilding
 
 if TYPE_CHECKING:
     from .board import Board
@@ -9,7 +11,7 @@ if TYPE_CHECKING:
 import copy
 import math
 
-from classes.buildings.enums import BuildingType
+from classes.buildings.enums import BuildingName, BuildingType
 from classes.cards.card import Card
 from classes.cards.enums import CardName
 from classes.enums import Era
@@ -22,6 +24,7 @@ from consts import (BUILDINGS, CANAL_PRICE, ONE_RAILROAD_COAL_PRICE,
                     TWO_RAILROAD_COAL_PRICE, TWO_RAILROAD_PRICE)
 from python.id import id
 
+from .trade_post import TradePost
 from .build_location import BuildLocation
 from .buildings.building import Building
 from .buildings.market_building import MarketBuilding
@@ -54,6 +57,8 @@ class Player:
         for building in self.buildings:
             self.buildingDict[f"{building.name.value} {building.tier}"] = building
 
+        # If a playr just received a trade post bonus for free development
+        self.freeDevelopCount = False
         
         self.industryMat = defaultdict(list)
 
@@ -266,7 +271,7 @@ class Player:
         )
 
     def canAffordSellBuilding(self, building: MarketBuilding) -> bool:
-        assert building.type == BuildingType.market
+        
         return building.beerCost <= self.board.getAvailableBeerAmount(
             self, building.town
         )
@@ -338,13 +343,29 @@ class Player:
             and building2.owner == self
         )
 
+
+    # BEER sourcee has to be correctly passed be in network 
     # 4 SELL
-    def canSell(self, building: MarketBuilding) -> bool:
-        return (
-            building.isActive
-            and building.owner == self
-            and self.canAffordSellBuilding(building)
-        )
+    # TODO: Assert Connected to market 
+    def canSell(self, building: MarketBuilding, tradePost: TradePost,  beerSource: IndustryBuilding | TradePost = None) -> bool:
+        assert isinstance(beerSource, TradePost) or (isinstance(beerSource, IndustryBuilding) and beerSource.type == BuildingType.industry and beerSource.name == BuildingName.beer) 
+        assert building.isActive and building.owner == self
+        assert self.board.areNetworked(building.town, tradePost)
+        if not beerSource:
+            return building.beerCost == 0
+        
+        assert building.type == BuildingType.market
+        if isinstance(beerSource, TradePost):
+            return beerSource.hasBeerForBuilding(building.name)
+        
+        if beerSource.resourceAmount < 1:
+            return False
+        
+        if isinstance(beerSource, IndustryBuilding) and beerSource.owner != self:
+            return self.board.areNetworked(building.town, beerSource.town)
+
+
+        return True
 
     # 5 LOAN
     def canLoan(self) -> bool:
@@ -369,8 +390,61 @@ class Player:
     def canPassTurn(self) -> bool:
         return True
 
+   
+
     """Actions"""
-    
+    def getAvailableBeerSources(self, building: MarketBuilding) -> Tuple[Set[TradePost], Set[IndustryBuilding | TradePost], int]:
+        # Breweries with available beer that can be used
+        beers: Set[IndustryBuilding | TradePost] = set()
+        
+        # TradePosts where the building can be sold
+        tradePosts = set()
+
+        beerFromBreweries = 0
+        beerFromTradePosts = 0
+
+        # Add all own beers
+        for b in self.currentBuildings:
+            if isinstance(b, IndustryBuilding) and b.isBeerBuilding() and not b in beers:
+                beers.add(b)
+                beerFromBreweries += b.resourceAmount
+                
+        
+        # If Building is present start a searching for available Oponent BeerSources and Tradeposts in the network
+        
+        q = deque([building.town])
+        v = set([building.town.id])
+
+        while q:
+            town: TradePost | Town = q.popleft()  
+
+            # Verify if tradepost has beer
+            if isinstance(town, TradePost):
+                if town.canSellHere(building.name):
+                    tradePosts.add(town)
+                if town.hasBeerForBuilding(building.name) and not town in beers:
+                    beers.add(town)
+                    beerFromTradePosts = 1
+                continue
+
+            # verify each town for beer
+            for bl in town.buildLocations:
+                if bl.building and isinstance(bl.building, IndustryBuilding) and bl.building.isBeerBuilding() and not bl.building in beers:
+                    beers.add(bl.building)
+                    beerFromBreweries += bl.building.resourceAmount
+
+
+            
+            # get town neighbors, add to q
+            for roadLocation in town.networks:
+                if roadLocation.isBuilt:
+                    for _town in roadLocation.towns:
+                        if _town.id not in v:
+                            q.append(_town)
+                            v.add(_town.id)
+        
+        return tradePosts, beers, beerFromBreweries + beerFromTradePosts
+
     # Get a list off all available road locations where a road could be build
     def getAvailableNetworks(self) -> Set[RoadLocation]:
         
@@ -420,31 +494,20 @@ class Player:
         # set of tuples (building, buildLocation) indicating possible  builds 
         builds = set()
 
-        if not isinstance(card, LocationCard):
-            return builds
-
         firstBuildings = []
         for k in self.industryMat.keys():
             if len(self.industryMat[k]) > 0:
                 firstBuildings.append(self.industryMat[k][-1])
         
-        # TODO: Return all unoccupied towns if wild 
-        if card.isWild:
-            for b in firstBuildings: 
-                for t in self.board.towns:
+
+        towns: List[Town] = self.board.towns if card.isWild else [self.board.townDict[card.name]]
+              
+        for b in firstBuildings:
+            for t in towns:
+                if isinstance(t, Town):
                     for bl in t.buildLocations:
                         if self.canBuildBuilding(b, bl):
                             builds.add((b, bl))
-            return builds
-
-        town: Town = self.board.townDict[card.name]
-
-        availableBuildLocations = [bl for bl in town.buildLocations]
-        
-        for b in firstBuildings:
-            for bl in availableBuildLocations:
-                if self.canBuildBuilding(b, bl):
-                    builds.add((b, bl))
         
         return builds
     
@@ -518,13 +581,46 @@ class Player:
 
     def isCardInHand(self, card: Card):
         return card.id in [_card.id for _card in self.hand.cards]
+    
+    def canUseCardForBuilding(self, building: Building, buildLocation: BuildLocation, card: Card):
+        if isinstance(card, IndustryCard):
+            builds = set(card.getBuildNames())
+            return building.name in builds and len(set(buildLocation.possibleBuilds).intersection(builds)) > 0
+        return card.name == buildLocation.town.name
+
+    # Get A list of buildings that could be sold if you have a beer source 
+    # 
+    #  should not work if  (2 beer box) connected to Tradepost with 1 beer available at each tile - no other beer
+        
+
+    def getAvailableBuildingsForSale(self):
+        marketBuildings = set()
+        
+
+
+        for building in self.currentBuildings:
+            if building.isFlipped or not building.isActive or not isinstance(building, MarketBuilding):
+                continue
+            tradePosts, beers, numBeerAvailable = self.getAvailableBeerSources(building)
+            if len(tradePosts) > 0 and building.beerCost <= numBeerAvailable:
+                marketBuildings.add(building)
+
+        return marketBuildings
+
+            
 
     # todo player discarding for actions
     # 1 BUILD
-    def buildBuilding(self, building: Building, buildLocation: BuildLocation, card: Card):
-        assert building == self.industryMat[building.name][-1]
+    def buildBuilding(self, industryName: BuildingName, buildLocation: BuildLocation, card: Card):
+
+
+        assert len(self.industryMat[industryName]) > 0
+        
+        building = self.industryMat[industryName][-1]
+
         assert self.isCardInHand(card)
         assert self.canBuildBuilding(building, buildLocation)
+        assert self.canUseCardForBuilding(building, buildLocation, card)
         if isinstance(card, LocationCard):
             assert card.name == buildLocation.town.name
             if card.isWild:
@@ -551,7 +647,7 @@ class Player:
         building.build(buildLocation)
         self.board.buildBuilding(building, buildLocation, self)
         self.currentBuildings.add(building)
-        self.industryMat[building.name].pop(-1)
+        self.industryMat[industryName].pop(-1)
         self.currentTowns.add(building.town)
         
 
@@ -591,12 +687,19 @@ class Player:
         self.industryMat[building2.name].pop(-1)
         self.hand.spendCard(discard)
 
-
     # 4 SELL
-    def sell(self, building: MarketBuilding, discard: Card):
+    def sell(self, discard: Card,  forSale: List[Tuple[MarketBuilding, Tuple[IndustryBuilding | TradePost], TradePost]]) :
+
         assert self.isCardInHand(discard)
-        assert self.canSell(building)
-        self.board.sellBuilding(building, self)
+        for building, beerSources, tradePost in forSale:
+            assert building.beerCost == len(beerSources)
+            for beerSource in beerSources:
+                assert self.canSell(building, tradePost, beerSource)
+
+        for building, beerSources  in forSale:
+           self.board.sellBuilding(player=self, building=building, beerSources=beerSources)
+
+        # self.board.sellBuilding(building, self)
         self.hand.spendCard(discard)
 
 

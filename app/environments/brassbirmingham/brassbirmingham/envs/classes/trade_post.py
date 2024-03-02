@@ -1,4 +1,8 @@
+from collections import defaultdict
 from typing import List
+from classes.buildings.building import Building
+from classes.buildings.enums import BuildingName, MerchantName
+from classes.buildings.market_building import MarketBuilding
 
 from python.id import id
 from python.print_colors import prLightPurple
@@ -39,6 +43,7 @@ class TradePost:
         self.victoryPointsGained = victoryPointsGained
         self.incomeGained = incomeGained
         self.merchantTiles = []  # list of merchant tiles
+        self.tileHasBeer = defaultdict(bool)
         self.networkPoints = networkPoints
         self.canDevelop = canDevelop
         self.networks: List[RoadLocation] = []
@@ -61,6 +66,27 @@ class TradePost:
 
     def addMerchantTile(self, merchantTile: str):
         self.merchantTiles.append(merchantTile)
+        if merchantTile != MerchantName.blank: 
+            self.tileHasBeer[merchantTile] = True
+
+    def hasBeerForBuilding(self, buildingName: BuildingName):
+        if MerchantName.all in self.tileHasBeer:
+            return self.tileHasBeer[MerchantName.all]
+        if buildingName in self.tileHasBeer:
+            return self.tileHasBeer(buildingName)
+
+        return False 
+
+    def canSellHere(self, building: MarketBuilding):
+        if MerchantName.all in self.tileHasBeer:
+            return True
+        return building.name in self.tileHasBeer
+
+    def consumeBeer(self, merchantTile: MarketBuilding):
+        return merchantTile in self.tileHasBeer and self.tileHasBeer[merchantTile] == False
+
+
+
 
     """
     addRoadLocation

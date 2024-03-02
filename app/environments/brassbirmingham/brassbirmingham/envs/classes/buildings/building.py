@@ -1,13 +1,12 @@
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
-
 from python.id import id
 
 if TYPE_CHECKING:
     from ..player import Player
 
-from .enums import BuildingName, BuildingType
+from .enums import BuildingName, BuildingType, MerchantName
 
 
 class Building:
@@ -80,6 +79,27 @@ class Building:
         self.buildLocation = buildLocation
         self.town = buildLocation.town
 
+    def getBuildingNamesByMechant(merchantName: MerchantName):
+        if merchantName == MerchantName.cotton:
+            return [BuildingName.cotton]
+        elif merchantName == MerchantName.goods:
+            return [BuildingName.goods]
+        elif merchantName == MerchantName.pottery:
+            return [BuildingName.pottery]
+        elif merchantName == MerchantName.all:
+            return [BuildingName.cotton, BuildingName.goods, BuildingName.pottery]
+        else:
+            return []
+
+    # Is beer building
+    def isBeerBuilding(self) -> bool:
+        isBeer =  self.type == BuildingType.industry and self.name == BuildingName.beer
+        hasBeer = self.isActive and not self.isFlipped and not self.isRetired and self.resourceAmount > 0
+        return isBeer and hasBeer
+
     def __repr__(self) -> str:
+        if self.isActive and self.town:
+            return f"\nLevel {self.tier} {self.name.value} in {self.town} :: Owner: {self.owner}"
+
         return f"\nBuilding {self.tier}:{self.name}:: Owner: {self.owner}, Bought: {self.isActive}, Sold: {self.isSold} Retired: {self.isRetired}"
     

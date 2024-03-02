@@ -1,10 +1,11 @@
 from __future__ import annotations
+from collections import deque
 
 import copy
-from typing import TYPE_CHECKING, Dict, List
-from app.environments.brassbirmingham.brassbirmingham.envs.classes.cards.enums import CardName
-from app.environments.brassbirmingham.brassbirmingham.envs.classes.cards.industry_card import IndustryCard
-from app.environments.brassbirmingham.brassbirmingham.envs.classes.cards.location_card import LocationCard
+from typing import TYPE_CHECKING, Dict, List, Tuple
+from .cards.enums import CardName
+from .cards.industry_card import IndustryCard
+from .cards.location_card import LocationCard
 
 from consts import (CANAL_PRICE, MAX_MARKET_COAL, MAX_MARKET_IRON,
                     ONE_RAILROAD_COAL_PRICE, ONE_RAILROAD_PRICE,
@@ -135,6 +136,8 @@ class Board:
             currIronRemaining = max(currIronRemaining - 1, 0)
         return price
 
+
+
     """
     areNetworked
     
@@ -157,11 +160,11 @@ class Board:
                     return True
                 
 
-        q = [t1]
+        q = deque([t1])
         v = set(t1.id)
 
         while q:
-            town = q.pop(0)  # bfs
+            town = q.popleft()  # bfs
             # get town neighbors, add to q
             for roadLocation in town.networks:
                 if roadLocation.isBuilt:
@@ -239,6 +242,17 @@ class Board:
                     _available = availableIron.pop(0)
             X -= 1
         return
+
+    def giveTradePostBonus(self, player: Player, post: TradePost):
+        if post.canDevelop:
+            player.freeDevelopCount += 1
+        elif post.moneyGained > 0:
+            player.money += post.moneyGained
+        elif post.incomeGained > 0:
+            player.income += post.incomeGained
+        elif post.victoryPointsGained > 0:
+            player.victoryPoints += post.victoryPointsGained
+        
 
     """
     removeXBeer
@@ -574,9 +588,31 @@ class Board:
     :param building: building to sell
     """
 
-    def sellBuilding(self, building: MarketBuilding, player: Player):
-        self.removeXBeer(building.beerCost, [building.town], player)
-        building.sell()
+    def sellBuildings(self, buildings: List[MarketBuilding]):
+        for building in buildings:
+            building.sell()
+
+
+    def consumeBeer(self, building: MarketBuilding, beerSource: IndustryBuilding | TradePost):
+        if isinstance(beerSource, TradePost):
+            beerSource.beerAmount -= 1
+            self.giveTradePostBonus(player=building.owner, post=beerSource)
+            return
+        beerSource.resourceAmount -= 1
+    
+
+    
+    def sellBuilding(self, player: Player, building: MarketBuilding, beerSources: Tuple[IndustryBuilding | TradePost] ):
+        if building.beerCost == 0:
+            building.sell()
+        elif building.beerCost == 1:
+            self.consumeBeer(building, beerSource=beerSources[0])
+            building.sell()
+            return
+        else:
+            self.consumeBeer(building, beerSource=beerSources[0])
+            self.consumeBeer(building, beerSource=beerSources[1])
+            building.sell()
 
     def getVictoryPoints(self) -> Dict[Player, int]:
         points = {player: player.victoryPoints for player in self.players}

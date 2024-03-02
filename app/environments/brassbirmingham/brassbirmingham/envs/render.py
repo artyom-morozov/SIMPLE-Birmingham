@@ -178,6 +178,7 @@ class Render:
 	def drawTradingPostBeer(self):
 		for trade in self.board.tradePosts:
 			coords = BEER_COORDS[trade.name]
+			print(trade, trade.beerAmount)
 			if trade.beerAmount > 0:
 				pygame.draw.circle(self.win, TAN, coords[0], BEER_SIZE)
 			if trade.beerAmount > 1:

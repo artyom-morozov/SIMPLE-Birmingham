@@ -22,7 +22,7 @@ class Hand:
 
     def spendCard(self, card: Card):
         self.cards = list(
-            filter(lambda x: x.id != card.self.cards, self.cards)
+            filter(lambda x: x.id != card.id, self.cards)
         )  # remove that card from hand
         self.deck.discardPile.append(card)
 

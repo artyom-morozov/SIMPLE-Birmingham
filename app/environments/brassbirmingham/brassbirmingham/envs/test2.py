@@ -27,11 +27,112 @@ class Test(unittest.TestCase):
         if numPlayers > 3:
             self.p4 = Player("Mr. Mcdonald", self.board)
 
+        
+
+
         # randomize merchant tile init
         for i, tradePost in enumerate(self.board.tradePosts):
             tradePost.addMerchantTile(self.board.merchantTiles[0])
 
+    def testSelling(self):
+        self.resetGame(2)
+
+        print('Player 1', self.p1, ' color - ', self.p1.color)
+        print('Player 2', self.p2, ' color - ', self.p2.color)
+
+        birmCard1 = LocationCard(name=BIRMINGHAM)
+        birmCard2 = LocationCard(name=WALSALL)
+
+
+        garb1 = LocationCard(name=WOLVERHAMPTON)
+        garb2 = LocationCard(name=WOLVERHAMPTON)
+
+        self.p1.hand.cards = [birmCard1, garb1]
+        self.p2.hand.cards = [birmCard2, garb2]
+
+        birm = self.board.townDict['Birmingham']
+        b_to_ox = birm.networks[4]
+        birm_cotton_bl = birm.buildLocations[0]
+        ox = self.board.tradePostDict[OXFORD]
+
+        # Build road to Oxword
+        self.p2.buildCanal(b_to_ox, garb2)
+
+        p1_cotton = self.p1.industryMat[BuildingName.cotton][-1]
+        self.p1.buildBuilding(BuildingName.cotton, birm_cotton_bl, birmCard1)
+
+
+
+        tradeposts, beers, beerAvailable = self.p1.getAvailableBeerSources(p1_cotton)
+
+        self.assertEqual(tradeposts, set([ox]), 'Should only have one tradpost')
+        self.assertEqual(beers, set([ox]), 'Should only have one beer source which is tradepost')
+        self.assertEqual(beerAvailable, 1, 'Should only have one beer source available overall')
+        # Enumerate birmingham build locations
+        # Get buildlocation id
+        # print('Birmingham builds')
+        # for i, bl in enumerate(birm.buildLocations):
+        #     print(i, ' can build', bl.possibleBuilds)
+
+
+        # Build beer and road in walsall andd test 
+        walsall: Town = self.board.townDict[WALSALL]
+        b_to_w = walsall.networks[0]
+
+        self.p2.money = 30
+        p2_beer = self.p2.industryMat[BuildingName.beer][-1]
+        self.p2.buildBuilding(BuildingName.beer, walsall.buildLocations[1], birmCard2)
+
+        tradeposts, beers, beerAvailable = self.p1.getAvailableBeerSources(p1_cotton)
+
+        self.assertEqual(tradeposts, set([ox]), 'Should only have one tradpost after oponents beer')
+        self.assertEqual(beers, set([ox]), 'Should only have one beer source  after oponents beer')
+        self.assertEqual(beerAvailable, 1, 'Should only have one beer source available overall after oponents beer')
+
+
+        # Test after road to Oponenets beer
+
+        self.p2.hand.cards = [LocationCard(WOLVERHAMPTON), LocationCard(WOLVERHAMPTON)]
+        self.p2.buildCanal(birm.networks[0], self.p2.hand.cards[0])
         
+        tradeposts, beers, beerAvailable = self.p1.getAvailableBeerSources(p1_cotton)
+
+
+
+        self.assertEqual(tradeposts, set([ox]), 'Should  have one tradpost after oponents beer')
+        self.assertEqual(beers, set([ox, walsall.buildLocations[1].building]), 'Should  have 2 beer source after oponents beer (connected)')
+        self.assertEqual(beerAvailable, 2, 'Should  have 2 beer source available overall after oponents beer (connected)')
+
+
+        # Test after building own beer 
+        self.p1.money = 30
+        self.p1.hand.cards = [LocationCard(UTTOXETER)]
+        utx: Town = self.board.townDict[UTTOXETER]
+        self.p1.buildBuilding(BuildingName.beer, utx.buildLocations[0], self.p1.hand.cards[0])
+
+        tradeposts, beers, beerAvailable = self.p1.getAvailableBeerSources(p1_cotton)
+
+        print('Beers available for selling ', beers)
+        print('Num beers available', beerAvailable)
+
+        self.assertEqual(beers, set([ox, walsall.buildLocations[1].building, utx.buildLocations[0].building]), 'Should  have own beer source  after own beer')
+        self.assertEqual(beerAvailable, 3, 'Should  have 3 beer source available overall after own beer')
+
+
+
+        # render(self.board)
+
+
+
+
+
+        
+
+
+        # Build cotton one in birm
+
+    
+
     def testAllNetworks(self):
         self.resetGame(2)
 
@@ -65,7 +166,14 @@ class Test(unittest.TestCase):
         self.board.era = Era.canal
         birm = self.board.townDict['Birmingham']
         b_to_ox = birm.networks[4]
-        self.p2.buildCanal(b_to_ox)
+
+
+        # SetupCards for building
+        CoalbrookCard = LocationCard(name=COALBROOKDALE)
+        WalsallCard = LocationCard(name=WALSALL)
+
+        self.p2.hand.cards = [CoalbrookCard]
+        self.p2.buildCanal(b_to_ox, CoalbrookCard)
         availableRoadsP1 = self.p1.getAvailableNetworks()
         availableRoadsP2 = self.p2.getAvailableNetworks()
 
@@ -87,8 +195,12 @@ class Test(unittest.TestCase):
 
         # Test affter building
 
-        self.p1CottonBuilding = self.p1.buildings[10]
-        self.p1.buildBuilding(self.p1CottonBuilding, birm.buildLocations[0])
+
+
+        birmCard = LocationCard(name=BIRMINGHAM)
+        self.p1.hand.cards.append(birmCard)
+
+        self.p1.buildBuilding(BuildingName.cotton, birm.buildLocations[0], card=birmCard)
         availableRoadsP1 = self.p1.getAvailableNetworks()
 
 
@@ -98,12 +210,14 @@ class Test(unittest.TestCase):
         # render(self.board, self.call)
         self.assertTrue(
             len(availableRoadsP1) == 5,
-            f"Player 1 Should have 4 railroads from birmingham after building",
+            f"Player 1 Should have 5 railroads from birmingham after building",
         )
 
         b_to_w = birm.networks[0]
         # wallsall = self.board.townDict['Walsall']
-        self.p1.buildCanal(b_to_w)
+
+        self.p1.hand.cards = [WalsallCard]
+        self.p1.buildCanal(b_to_w, WalsallCard)
         # for i, road in enumerate(self.p1.getAvailableNetworks().difference(availableRoadsP1)):
         #     print(i, road)
         
@@ -219,19 +333,21 @@ class Test(unittest.TestCase):
         # print('Unique building costs  are ', uniqueCosts, len(uniqueCosts))
 
 
-    def testAvailableCardBuilds(self):
+    def testAvailableIndustryCardBuilds(self):
                 
         self.resetGame(2)
 
-
-        self.p1.hand.cards = [IndustryCard(name=CardName.brewery)]
+        beerCard1 = IndustryCard(name=CardName.brewery)
+        beerCard2 = IndustryCard(name=CardName.brewery)
+        self.p1.hand.cards = [beerCard1]
+        self.p2.hand.cards = [beerCard2]
         # availableBls = set([bl for b, bl in self.p1.getAvailableBuilds()])
         # industriesOnBoard = set()
         # for t in self.board.towns:
         #     if isinstance(t, Town):
         #         for bl in t.buildLocations:
         #             for card in self.p1.hand.cards:
-        #                 if isinstance(card, IndustryCard):
+        #                 if isinstance(card, LocationCard):
         #                     for bname in card.getBuildNames():
         #                         if bname in bl.possibleBuilds:
         #                             industriesOnBoard.add(bl)
@@ -252,23 +368,34 @@ class Test(unittest.TestCase):
         
         
         # # Test Builds After Network
-        self.p1.buildCanal(shrew_to_coal)
+        
+        garbageCard1 = LocationCard(CANNOCK)
+        self.p1.hand.cards.append(garbageCard1)
+
+
+        # print('CARDS BEFORE CANAL', self.p1.hand.cards)
+
+        self.p1.buildCanal(shrew_to_coal, discard=garbageCard1)
+        # print('CARDS AFTER CANAL', self.p1.hand.cards)
+
         # # render(self.board)
         
         coalbrookdaleBeerSlot = coalbrookdale.buildLocations[0]
 
 
         availableBuilds = self.p1.getAvailableBuilds()
+        # print('Failing test')
         # for b, bl in availableBuilds:
+
         #     print(b.name, ' in ',bl.town.name)
-        
+        #     print(f'BID({b.id}) BL_ID({bl.id})')
 
         self.assertEqual(availableBuilds, set([(p1brewery, coalbrookdaleBeerSlot)]), 'Should only have one build available after network')
 
 
         # TEst After other player building
         
-        self.p2.buildBuilding(p2brewery, coalbrookdaleBeerSlot)
+        self.p2.buildBuilding(BuildingName.beer, coalbrookdaleBeerSlot, card=beerCard2)
 
 
         self.assertEqual(len(self.p1.getAvailableBuilds()), 0 , 'Shoould be no builds after occupiing')
@@ -283,8 +410,14 @@ class Test(unittest.TestCase):
 
         self.assertEqual(self.p1.getAvailableBuilds(), set([(self.p1.industryMat[BuildingName.iron][-1], coalbrookdale.buildLocations[1]), (self.p1.industryMat[BuildingName.coal][-1], coalbrookdale.buildLocations[2])]) , 'Shoould be no builds after occupiing')
 
-        
-        self.p2.develop(self.p2.industryMat[BuildingName.beer][-1], self.p2.industryMat[BuildingName.beer][-2])
+
+
+        # Add card for developing and develop
+        garbageCard2 = LocationCard(CANNOCK)
+        self.p2.hand.cards.append(garbageCard2) 
+        # print('Cards in hand', self.p2.hand.cards)
+
+        self.p2.develop(self.p2.industryMat[BuildingName.beer][-1], self.p2.industryMat[BuildingName.beer][-2], discard=garbageCard2)
 
         # print('Last beer',  self.p2.industryMat[BuildingName.beer][-1])
         # print('Available Builds after development:')
@@ -296,8 +429,150 @@ class Test(unittest.TestCase):
 
 
         # render(self.board)
+    def testCards(self):
+        self.resetGame(2)
+
+        dale1, dale2 = LocationCard(name=COALBROOKDALE), LocationCard(name=COALBROOKDALE)
 
 
+        self.p1.hand.cards = [dale1, dale2]
+        
+        coalbrookdale: Town = self.board.townDict[COALBROOKDALE]
+        
+        # Get buildlocation id
+        # print('Coalbrookdale builds')
+        # for i, bl in enumerate(coalbrookdale.buildLocations):
+        #     print(i, ' can build', bl.possibleBuilds)
+
+        self.p1.buildBuilding(industryName=BuildingName.coal, buildLocation=coalbrookdale.buildLocations[2], card=dale1)
+        
+        availableBuilds = self.p1.getAvailableBuilds()
+
+        self.assertEqual(set([(self.p1.industryMat[BuildingName.coal][-1], coalbrookdale.buildLocations[2])]), availableBuilds, 'Should just have 1 build after spending location card')
+        self.assertEqual(self.p1.hand.cards, [dale2], 'Should spend the card used')
+
+        # print('Builds after building coal')
+        # for b, bl in availableBuilds:
+
+        #     print(b.name, f'({b.tier}) in ',bl.town.name)
+        #     print(f'BID({b.id}) BL_ID({bl.id})')
+
+
+
+
+
+
+    def testAvailableLocationCardBuilds(self):
+                
+        self.resetGame(2)
+
+
+         # Test Wild Card
+        
+        self.p1.hand.cards = [LocationCard(name=CardName.wild_location, isWild=True)]
+        # print('Printing available builds for Player 1 With WILD Location Card')
+        # for b, bl in self.p1.getAvailableBuilds():
+        #     print(b.name, f'({b.tier})  in ',bl.town.name)
+        
+        allAvailableTowns = set([bl.town for _, bl in self.p1.getAvailableBuilds()])
+        allGameTowns = set(self.board.towns)
+        
+
+        print('Towns UNAvailable for building after Wild Location Card', allGameTowns.difference(allAvailableTowns))
+
+
+
+
+        self.p1.hand.cards = [LocationCard(name=COALBROOKDALE)]
+        self.p2.hand.cards = [LocationCard(name=COALBROOKDALE)]
+        # availableBls = set([bl for b, bl in self.p1.getAvailableBuilds()])
+        # industriesOnBoard = set()
+        # for t in self.board.towns:
+        #     if isinstance(t, Town):
+        #         for bl in t.buildLocations:
+        #             for card in self.p1.hand.cards:
+        #                 if isinstance(card, LocationCard):
+        #                     for bname in card.getBuildNames():
+        #                         if bname in bl.possibleBuilds:
+        #                             industriesOnBoard.add(bl)
+        # # print("buildibngs before network")
+        # # for b, bl in self.p1.getAvailableBuilds():
+        # #     print(b.name, ' in ',bl.town.name)
+        # self.assertEqual(len(availableBls.difference(industriesOnBoard)), 0, 'Builds available from industry cards should be equal to all build locations')
+
+
+
+        coalbrookdale: Town = self.board.townDict[COALBROOKDALE]
+
+
+        p2brewery = self.p2.industryMat[BuildingName.beer][-1]
+        p1coal = self.p1.industryMat[BuildingName.beer][-1]
+        
+        shrew_to_coal = coalbrookdale.networks[1]
+        
+        
+        # Test Builds After Building 
+        
+        coalbrookdaleBeerSlot = coalbrookdale.buildLocations[0]
+        
+        
+        self.p2.buildBuilding(industryName=BuildingName.coal, buildLocation=coalbrookdale.buildLocations[2], card=self.p2.hand.cards[0])
+        
+
+
+        availableBuilds = self.p1.getAvailableBuilds()
+        self.assertNotIn((p1coal, coalbrookdale.buildLocations[2]), availableBuilds, 'Should not have occupied location')
+        
+        self.assertEqual(self.p2.getAvailableBuilds(), set(), "Should be empty if no cards")
+
+
+       
+        # print('Printing UNavailablee builds for Player 1 andd their reasons')
+        # firstBuildings = 
+
+
+        # self.assertEqual(allAvailableTowns, allGameTowns)
+        # print('Printing available builds for Player 2')
+        
+
+
+        # for b, bl in self.p2.getAvailableBuilds():
+        #     print(b.name, f'({b.tier})  in ',bl.town.name)
+        
+
+        # self.assertEqual(availableBuilds, set([(p1brewery, coalbrookdaleBeerSlot)]), 'Should only have one build available after network')
+
+
+        # # TEst After other player building
+        
+        # self.p2.buildBuilding(p2brewery, coalbrookdaleBeerSlot)
+
+
+        # self.assertEqual(len(self.p1.getAvailableBuilds()), 0 , 'Shoould be no builds after occupiing')
+        
+        # self.p2.hand.cards = [LocationCard(name=COALBROOKDALE)]
+        # self.assertEqual(len(self.p2.getAvailableBuilds()), 0 , 'Shoould be no builds after occupiing')
+
+        # # self.board.era = Era.railroad
+        # self.p1.hand.cards = [LocationCard(name=COALBROOKDALE)]
+
+       
+
+        # self.assertEqual(self.p1.getAvailableBuilds(), set([(self.p1.industryMat[BuildingName.iron][-1], coalbrookdale.buildLocations[1]), (self.p1.industryMat[BuildingName.coal][-1], coalbrookdale.buildLocations[2])]) , 'Shoould be no builds after occupiing')
+
+        
+        # self.p2.develop(self.p2.industryMat[BuildingName.beer][-1], self.p2.industryMat[BuildingName.beer][-2])
+
+        # # print('Last beer',  self.p2.industryMat[BuildingName.beer][-1])
+        # # print('Available Builds after development:')
+        # # for b, bl in self.p2.getAvailableBuilds():
+        # #     print(b.name, ' in ',bl.town.name)
+
+
+        # self.assertEqual(len(self.p2.getAvailableBuilds()), 1, 'Shoould have overbuilding availablee after deveelopment')
+    
+   
+    
     def testIndustryMat(self):
         self.resetGame(2)
 
