@@ -3,6 +3,7 @@ from collections import deque
 
 import copy
 from typing import TYPE_CHECKING, Dict, List, Tuple
+from numpy.random import shuffle
 from .cards.enums import CardName
 from .cards.industry_card import IndustryCard
 from .cards.location_card import LocationCard
@@ -27,7 +28,7 @@ from .road_location import RoadLocation
 from .roads.canal import Canal
 from .roads.railroad import Railroad
 from .town import Town
-from .trade_post import TradePost
+from .trade_post import Merchant, TradePost
 
 if TYPE_CHECKING:
     from .player import Player
@@ -39,11 +40,15 @@ class Board:
         self.numPlayers = numPlayers
         self.era = Era.canal
         self.deck = Deck(copy.deepcopy(STARTING_CARDS[str(numPlayers)]))
+        self.deck.discard(numPlayers)
+
         self.towns = copy.deepcopy(TOWNS)  # array of Town objects
         self.townDict = {}
         self.tradePosts = copy.deepcopy(TRADEPOSTS[str(numPlayers)])
         self.tradePostDict = {}
         self.merchantTiles = copy.deepcopy(MERCHANT_TILES[str(numPlayers)])
+        self.merchants = [Merchant(name=merchantName) for merchantName in self.merchantTiles]
+
         self.coalMarketRemaining = MAX_MARKET_COAL - 1  # coal market missing 1
         self.ironMarketRemaining = MAX_MARKET_IRON - 2  # iron market missing 1
         self.roadLocations = copy.deepcopy(ROAD_LOCATIONS)
@@ -73,6 +78,15 @@ class Board:
             for roadLocation in self.roadLocations:
                 if tradePost.name in roadLocation.networks:
                     tradePost.addRoadLocation(roadLocation)
+        
+        # init merchant tiles 
+
+        mechantTileId = 0
+        shuffle(self.merchants)
+        for tradePost in self.tradePosts:
+            for beer in range(tradePost.beerAmount):
+                tradePost.addMerchantTile(self.merchants[mechantTileId])
+                mechantTileId += 1
 
     """
     addPlayer
@@ -83,8 +97,26 @@ class Board:
 
     def addPlayer(self, player: Player):
         self.players.append(player)
-        for _ in range(STARTING_HAND_SIZE):
-            player.hand.draw()
+
+    """
+    orderPlayers
+    determine turn order for players. Should be random on first turn
+
+    :return id of the first player to go
+    """
+
+    def orderPlayers(self, random=False):
+
+        if random:
+            shuffle(self.players)
+        else:
+            self.players.sort(key=lambda p: p.spentThisTurn)
+        
+        for i in range(len(self.players)):
+            self.players[i].player_order = i
+
+        return self.players[0].id
+
 
     def getAllBuildings(self) -> List[Building]:
         l = []
@@ -370,6 +402,8 @@ class Board:
         # check for towns with iron available
         return len(self.getIronBuildings()) > 0
 
+    
+
     """
     isBeerAvailableFromBuildings
     
@@ -588,21 +622,21 @@ class Board:
     :param building: building to sell
     """
 
-    def sellBuildings(self, buildings: List[MarketBuilding]):
-        for building in buildings:
-            building.sell()
+    # def sellBuildings(self, buildings: List[MarketBuilding]):
+    #     for building in buildings:
+    #         building.sell()
 
 
-    def consumeBeer(self, building: MarketBuilding, beerSource: IndustryBuilding | TradePost):
-        if isinstance(beerSource, TradePost):
-            beerSource.beerAmount -= 1
-            self.giveTradePostBonus(player=building.owner, post=beerSource)
+    def consumeBeer(self, building: MarketBuilding, beerSource: IndustryBuilding | Merchant):
+        if isinstance(beerSource, Merchant):
+            beerSource.hasBeer = False
+            self.giveTradePostBonus(player=building.owner, post=beerSource.tradePost)
             return
         beerSource.resourceAmount -= 1
     
 
     
-    def sellBuilding(self, player: Player, building: MarketBuilding, beerSources: Tuple[IndustryBuilding | TradePost] ):
+    def sellBuilding(self, player: Player, building: MarketBuilding, beerSources: Tuple[IndustryBuilding | Merchant] ):
         if building.beerCost == 0:
             building.sell()
         elif building.beerCost == 1:

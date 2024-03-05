@@ -31,8 +31,8 @@ class Test(unittest.TestCase):
 
 
         # randomize merchant tile init
-        for i, tradePost in enumerate(self.board.tradePosts):
-            tradePost.addMerchantTile(self.board.merchantTiles[0])
+        # for i, tradePost in enumerate(self.board.tradePosts):
+        #     tradePost.addMerchantTile(self.board.merchantTiles[0])
 
     def testSelling(self):
         self.resetGame(2)

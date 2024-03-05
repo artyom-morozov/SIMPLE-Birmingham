@@ -1,3 +1,4 @@
+from collections import deque
 import random
 from typing import List
 
@@ -15,18 +16,26 @@ class Deck:
 
     def __init__(self, cards: List[Card]):
         self.id = id()
-        self.cards = cards
+        self.cards = deque(cards)
         self.discardPile = []
         self.shuffle()
 
     def shuffle(self):
         random.shuffle(self.cards)
 
-    def draw(self):
-        if len(self.cards) > 0:
-            return self.cards.pop()
-        else:
-            self.reset()
+    def draw(self, num=1) -> List[Card]:
+        output = []
+        discarded = 0
+        while len(self.cards) > 0 and discarded < num:
+            output.append(self.cards.pop())
+            discarded += 1
+        return output
+
+    def discard(self, num=1):
+        discarded = 0
+        while len(self.cards) > 0 and discarded < num:
+            self.discardPile.append(self.cards.pop())
+            discarded += 1
 
     def reset(self):
         self.cards = self.discardPile

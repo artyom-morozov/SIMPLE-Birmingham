@@ -14,3 +14,11 @@ class CardName(Enum):
     man_goods_or_cotton = "man_goods_or_cotton"
     wild_location = "wild_location"
     wild_industry = "wild_industry"
+
+class Colours(Enum):
+    Grey = 'grey'
+    Blue = 'blue'
+    Red = 'red'
+    Green = 'green'
+    Purple = 'purple'
+    Yellow = 'yellow'

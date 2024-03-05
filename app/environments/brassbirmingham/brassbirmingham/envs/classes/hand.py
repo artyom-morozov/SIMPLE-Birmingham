@@ -12,19 +12,17 @@ class Hand:
 
     :param deck: Deck object"""
 
-    def __init__(self, deck: Deck):
+    def __init__(self, cards: List[Card]):
         self.id = id()
-        self.cards: List[Card] = []
-        self.deck = deck
+        self.cards: List[Card] = cards
+        self.discard = []
 
-    def draw(self):
-        self.cards.append(self.deck.draw())
 
     def spendCard(self, card: Card):
         self.cards = list(
             filter(lambda x: x.id != card.id, self.cards)
         )  # remove that card from hand
-        self.deck.discardPile.append(card)
+        self.discard.append(card)
 
     def add(self, card: Card):
         self.cards.append(card)

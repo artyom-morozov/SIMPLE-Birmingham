@@ -1,5 +1,5 @@
 from collections import defaultdict
-from typing import List
+from typing import List, Set, Tuple
 from classes.buildings.building import Building
 from classes.buildings.enums import BuildingName, MerchantName
 from classes.buildings.market_building import MarketBuilding
@@ -10,6 +10,30 @@ from python.print_colors import prLightPurple
 from .road_location import RoadLocation
 from .town import Town
 
+
+class Merchant:
+    def __init__(
+        self,
+        name: MerchantName,
+    ):
+        self.id = id()
+        self.type = "TradePost Merchant"
+        self.name = name
+        self.hasBeer = True if self.name != MerchantName.blank else False
+        self.tradePost = None
+
+
+    def canSellHere(self, buildingName: BuildingName):
+        return self.name.value == buildingName.value or self.name == MerchantName.all
+
+    def consumeBeer(self):
+        self.hasBeer = False
+    
+    def __str__(self) -> str:
+        return f"Merchant({prLightPurple(self.name)})"
+
+    def __repr__(self) -> str:
+        return str(self)
 
 class TradePost:
     """
@@ -42,11 +66,11 @@ class TradePost:
         self.moneyGained = moneyGained
         self.victoryPointsGained = victoryPointsGained
         self.incomeGained = incomeGained
-        self.merchantTiles = []  # list of merchant tiles
-        self.tileHasBeer = defaultdict(bool)
+        self.merchantTiles: List[Merchant] = [] # merchant tiles and beer at each slot
         self.networkPoints = networkPoints
         self.canDevelop = canDevelop
         self.networks: List[RoadLocation] = []
+        self.supportedBuildings: Set[BuildingName] = set()
 
     # get Available canals to build
     def getAvailableCanals(self)  -> List[RoadLocation]:
@@ -64,26 +88,23 @@ class TradePost:
     :param merchantTile: merchantTile
     """
 
-    def addMerchantTile(self, merchantTile: str):
-        self.merchantTiles.append(merchantTile)
-        if merchantTile != MerchantName.blank: 
-            self.tileHasBeer[merchantTile] = True
+    def addMerchantTile(self, merchant: Merchant):
 
-    def hasBeerForBuilding(self, buildingName: BuildingName):
-        if MerchantName.all in self.tileHasBeer:
-            return self.tileHasBeer[MerchantName.all]
-        if buildingName in self.tileHasBeer:
-            return self.tileHasBeer(buildingName)
 
-        return False 
+        self.merchantTiles.append(merchant)
+        merchant.tradePost = self
+
+        if merchant.name == MerchantName.all:
+            self.supportedBuildings.update([BuildingName.goods, BuildingName.pottery, BuildingName.cotton])
+        elif merchant.name == MerchantName.goods:
+            self.supportedBuildings.add(BuildingName.goods)
+        elif merchant.name == MerchantName.pottery:
+            self.supportedBuildings.add(BuildingName.pottery)
+
+
 
     def canSellHere(self, building: MarketBuilding):
-        if MerchantName.all in self.tileHasBeer:
-            return True
-        return building.name in self.tileHasBeer
-
-    def consumeBeer(self, merchantTile: MarketBuilding):
-        return merchantTile in self.tileHasBeer and self.tileHasBeer[merchantTile] == False
+        return building.name in self.supportedBuildings
 
 
 

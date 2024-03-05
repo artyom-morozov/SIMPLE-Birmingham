@@ -14,7 +14,7 @@ import math
 from classes.buildings.enums import BuildingName, BuildingType
 from classes.cards.card import Card
 from classes.cards.enums import CardName
-from classes.enums import Era
+from classes.enums import Era, PlayerId
 from classes.cards.industry_card import IndustryCard
 from classes.cards.location_card import LocationCard
 from classes.hand import Hand
@@ -24,7 +24,7 @@ from consts import (BUILDINGS, CANAL_PRICE, ONE_RAILROAD_COAL_PRICE,
                     TWO_RAILROAD_COAL_PRICE, TWO_RAILROAD_PRICE)
 from python.id import id
 
-from .trade_post import TradePost
+from .trade_post import Merchant, TradePost
 from .build_location import BuildLocation
 from .buildings.building import Building
 from .buildings.market_building import MarketBuilding
@@ -34,12 +34,14 @@ from .town import Town
 PLAYER_COLORS = ["Red", "Blue", "Green", "Yellow"]
 
 class Player:
-    def __init__(self, name: str, board: Board):
-        self.id = id()
+    def __init__(self, name: str, board: Board, playerId: PlayerId = None):
+        self.id = playerId if playerId else id()
         self.name = name
         self.board = board
-        self.color = PLAYER_COLORS[len(self.board.players)]
-        self.hand = Hand(self.board.deck)
+        self.color = playerId.name if playerId else PLAYER_COLORS[len(self.board.players)]
+
+
+        self.hand = Hand(self.board.deck.draw(8))
         self.money = STARTING_MONEY
         self.income = 10
         self.victoryPoints = 0
@@ -108,16 +110,20 @@ class Player:
     def pay(self, amount: int):
         self.money -= amount
         assert self.money >= 0
+        self.spentThisTurn += amount
 
-    def incomeLevel(self):
-        if self.income <= 10:
-            return self.income - 10
-        if self.income <= 30:
-            return math.ceil((self.income - 10) / 2)
-        if self.income <= 60:
-            return math.ceil(self.income / 3)
-        if self.income <= 96:
-            return 20 + math.ceil((self.income - 60) / 4)
+    def incomeLevel(self, income=None):
+        
+        incomePoints = self.income if income is None else income
+
+        if incomePoints <= 10:
+            return incomePoints - 10
+        if incomePoints <= 30:
+            return math.ceil((incomePoints - 10) / 2)
+        if incomePoints <= 60:
+            return math.ceil(incomePoints / 3)
+        if incomePoints <= 96:
+            return 20 + math.ceil((incomePoints - 60) / 4)
         return 30
 
     def decreaseIncomeLevel(self, levels: int):
@@ -347,16 +353,17 @@ class Player:
     # BEER sourcee has to be correctly passed be in network 
     # 4 SELL
     # TODO: Assert Connected to market 
-    def canSell(self, building: MarketBuilding, tradePost: TradePost,  beerSource: IndustryBuilding | TradePost = None) -> bool:
-        assert isinstance(beerSource, TradePost) or (isinstance(beerSource, IndustryBuilding) and beerSource.type == BuildingType.industry and beerSource.name == BuildingName.beer) 
+    def canSell(self, building: MarketBuilding, merchant: Merchant, beerSource: IndustryBuilding | Merchant  = None) -> bool:
+        assert isinstance(beerSource, IndustryBuilding) and beerSource.type == BuildingType.industry and beerSource.name == BuildingName.beer
         assert building.isActive and building.owner == self
-        assert self.board.areNetworked(building.town, tradePost)
+        assert merchant.canSellHere(building.name)
+        assert self.board.areNetworked(building.town, merchant.tradePost)
         if not beerSource:
             return building.beerCost == 0
         
         assert building.type == BuildingType.market
-        if isinstance(beerSource, TradePost):
-            return beerSource.hasBeerForBuilding(building.name)
+        if isinstance(beerSource, Merchant):
+            return merchant.id == beerSource.id and beerSource.hasBeer
         
         if beerSource.resourceAmount < 1:
             return False
@@ -367,8 +374,56 @@ class Player:
 
         return True
 
+    def liquidate(self, debt):
+         
+        sortedBuildings = sorted(self.currentBuildings, key=lambda x: x.cost)
+
+        total_money = 0
+        buildings_to_remove: List[Building] = []
+    
+        for building in self.currentBuildings:
+            if total_money >= debt:
+                break
+            total_money += building.cost // 2
+            buildings_to_remove.append(building)
+        
+        # If the total money obtained is less than the debt, return -1
+        if total_money < debt:
+            return -1
+        
+        # Remove the liquidated buildings from the set
+        for building in buildings_to_remove:
+            building.isActive = False
+            building.isRetired = True
+            buildLocation: BuildLocation = building.buildLocation
+            building.buildLocation = None
+            buildLocation.building = None
+            self.currentBuildings.remove(building)
+        return total_money - debt
+
+    def getIncome(self):
+        newMoneyValue = self.money + self.incomeLevel()
+
+        if newMoneyValue >= 0:
+            self.money = newMoneyValue
+            return 
+
+        debt = abs(newMoneyValue)
+        
+        liquidationMoney = self.liquidate(debt=debt)
+
+        # substract VPS
+        if len(self.currentBuildings) == 0 or liquidationMoney == -1:
+            self.victoryPoints = max(0, self.victoryPoints - debt)
+            return
+
+        self.money = liquidationMoney
+
+
     # 5 LOAN
     def canLoan(self) -> bool:
+        if self.income > 10:
+            return True
         return self.income >= 3
 
     # 6 SCOUT
@@ -393,12 +448,12 @@ class Player:
    
 
     """Actions"""
-    def getAvailableBeerSources(self, building: MarketBuilding) -> Tuple[Set[TradePost], Set[IndustryBuilding | TradePost], int]:
+    def getAvailableBeerSources(self, building: MarketBuilding) -> Tuple[Set[Merchant], Set[IndustryBuilding | Merchant], int]:
         # Breweries with available beer that can be used
-        beers: Set[IndustryBuilding | TradePost] = set()
+        beers: Set[IndustryBuilding | Merchant] = set()
         
-        # TradePosts where the building can be sold
-        tradePosts = set()
+        # merchants where the building can be sold
+        merchants = set()
 
         beerFromBreweries = 0
         beerFromTradePosts = 0
@@ -421,10 +476,13 @@ class Player:
             # Verify if tradepost has beer
             if isinstance(town, TradePost):
                 if town.canSellHere(building.name):
-                    tradePosts.add(town)
-                if town.hasBeerForBuilding(building.name) and not town in beers:
-                    beers.add(town)
-                    beerFromTradePosts = 1
+                    for merchant in town.merchantTiles:
+                        if merchant.canSellHere(building.name):
+                            if merchant.hasBeer:
+                                beerFromTradePosts = 1
+                                beers.add(merchant)
+                            merchants.add(merchant)
+
                 continue
 
             # verify each town for beer
@@ -443,7 +501,7 @@ class Player:
                             q.append(_town)
                             v.add(_town.id)
         
-        return tradePosts, beers, beerFromBreweries + beerFromTradePosts
+        return merchants, beers, beerFromBreweries + beerFromTradePosts
 
     # Get a list off all available road locations where a road could be build
     def getAvailableNetworks(self) -> Set[RoadLocation]:
@@ -688,16 +746,15 @@ class Player:
         self.hand.spendCard(discard)
 
     # 4 SELL
-    def sell(self, discard: Card,  forSale: List[Tuple[MarketBuilding, Tuple[IndustryBuilding | TradePost], TradePost]]) :
+    def sell(self, discard: Card,  forSale: List[Tuple[MarketBuilding, Tuple[IndustryBuilding | Merchant], Merchant]]) :
 
         assert self.isCardInHand(discard)
-        for building, beerSources, tradePost in forSale:
+        for building, beerSources, merchant in forSale:
             assert building.beerCost == len(beerSources)
             for beerSource in beerSources:
-                assert self.canSell(building, tradePost, beerSource)
-
-        for building, beerSources  in forSale:
-           self.board.sellBuilding(player=self, building=building, beerSources=beerSources)
+                assert self.canSell(building, merchant, beerSource)
+            self.board.sellBuilding(player=self, building=building, beerSources=beerSources)
+           
 
         # self.board.sellBuilding(building, self)
         self.hand.spendCard(discard)

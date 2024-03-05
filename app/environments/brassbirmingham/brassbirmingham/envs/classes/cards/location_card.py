@@ -2,7 +2,7 @@ from python.print_colors import (prCyan, prGreen, prLightGray, prPurple, prRed,
                                  prYellow)
 
 from .card import Card
-from .enums import CardName, CardType
+from .enums import CardName, CardType, Colours
 # towns
 LEEK = "Leek"
 STOKE_ON_TRENT = "Stoke-On-Trent"
@@ -33,6 +33,24 @@ class LocationCard(Card):
         self.isWild = isWild
         self.isWild = name == CardName.wild_location
         self.name = name
+
+    def getColor(self):
+        if self.name in [STOKE_ON_TRENT, LEEK, STONE, UTTOXETER]:
+            return Colours.Blue
+        elif self.name in [BELPER, DERBY]:
+            return Colours.Green
+        elif self.name in [
+            STAFFORD,
+            CANNOCK,
+            WALSALL,
+            BURTON_UPON_TRENT,
+            TAMWORTH,
+        ]:
+            return Colours.Red
+        elif self.name in [NUNEATON, BIRMINGHAM, COVENTRY, REDDITCH]:
+            return Colours.Purple
+        else:
+            return Colours.Yellow
 
     def __str__(self) -> str:
         if self.isWild:
