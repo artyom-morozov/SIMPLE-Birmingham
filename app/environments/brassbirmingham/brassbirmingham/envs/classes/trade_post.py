@@ -24,8 +24,8 @@ class Merchant:
 
 
     def canSellHere(self, buildingName: BuildingName):
-        return self.name.value == buildingName.value or self.name == MerchantName.all
-
+        answer = self.name.value == buildingName.value or self.name == MerchantName.all
+        return answer
     def consumeBeer(self):
         self.hasBeer = False
     
@@ -103,8 +103,8 @@ class TradePost:
 
 
 
-    def canSellHere(self, building: MarketBuilding):
-        return building.name in self.supportedBuildings
+    def canSellHere(self, buildingName: BuildingName):
+        return buildingName in self.supportedBuildings
 
 
 

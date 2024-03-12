@@ -1,11 +1,17 @@
 
 from copy import copy
+import math
 import pygame
 import os
 import sys
+
+from classes.game import Game as GameModule
 from classes.board import Board
+from classes.buildings.building import Building
+from classes.buildings.market_building import MarketBuilding
 from classes.cards.industry_card import IndustryCard
 from classes.cards.location_card import LocationCard
+from classes.enums import ActionTypes, GameState
 from classes.town import Town
 from classes.player import Player
 from classes.build_location import BuildLocation
@@ -142,17 +148,85 @@ CARD_WIDTH = 130
 CARD_HEIGHT = 180
 
 
+ACTIONS ={
+    "UNDO": (1105, 1248),
+    "ROAD": (1260, 1190),
+    "BUILD": (1180, 1212),
+    "DEVELOP": (1342, 1185),
+    "SELL": (1425, 1182),
+    "LOAN": (1508, 1193),
+    "SCOUT": (1593, 1210),
+    "PASS": (1667, 1249)
+}
+
+
+
+
+PLAYER_POSITIONS = [
+    (128, 806),
+    (128, 806 + 98),
+    (128, 806 + 98 * 2),
+    (128, 806 + 98 * 3)
+]
+    
+
+
+INDUSTRY_MAT_POSITIONS = {
+    BuildingName.beer: {
+        "1": (1216, 417),
+        "2": (1216, 358),
+        "3": (1216, 299),
+        "4": (1216, 240)
+    },
+    BuildingName.goods: {
+        "1": (1216, 151),
+        "2": (1216, 92),
+        "3": (1216, 33),
+        "4": (1310, 33),
+        "5": (1407, 33),
+        "6": (1498, 33),
+        "7": (1593, 33),
+        "8": (1690, 33),
+    },
+    BuildingName.cotton: {
+        "1": (1338, 318),
+        "2": (1338, 260),
+        "3": (1338, 201),
+        "4": (1338, 142),
+    },
+    BuildingName.pottery: {
+        "1": (1464, 318),
+        "2": (1464, 260),
+        "3": (1464, 201),
+        "4": (1464, 142),
+        "5": (1555, 142),
+    },
+    BuildingName.coal: {
+        "1": (1369, 421),
+        "2": (1464, 421),
+        "3": (1559, 421),
+        "4": (1654, 421),
+    },
+    BuildingName.iron: {
+        "1": (1589, 318),
+        "2": (1686, 318),
+        "3": (1686, 257),
+        "4": (1686, 197),
+    }
+
+
+}
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'sftext/'))
 class Display:
-    def __init__(self, game=None, env=None, interactive=False, debug_mode=False, policies=None, test=False):
+    def __init__(self, game: GameModule =None, env=None, interactive=False, debug_mode=False, policies=None, test=False):
         if game is None:
             if env is None:
                 raise RuntimeError("Need to provide display with either game or env")
             self.env = env
         else:
             self.env = env
-            self.game = game
+            self.game: GameModule = game
         self.interactive = interactive
         self.debug_mode = debug_mode
 
@@ -195,6 +269,12 @@ class Display:
         self.locationCardsImg = {}
         self.industryCardsImg = {}
         self.colourMapCards = {}
+
+        self.wildIndustryImg = pygame.transform.scale(pygame.image.load(f"{local_dir}/images/wild_cards/wild_industry.png"), (CARD_WIDTH, CARD_HEIGHT))
+        self.wildLocationImg = pygame.transform.scale(pygame.image.load(f"{local_dir}/images/wild_cards/wild_location.png"), (CARD_WIDTH, CARD_HEIGHT))
+
+        self.action_menu_img = pygame.image.load(f"{local_dir}/images/components/actionMenu.png")
+
         for card in STARTING_CARDS[str(self.game.num_players)]:
             if isinstance(card, LocationCard):
                 colour = card.getColor()
@@ -203,31 +283,160 @@ class Display:
                 self.industryCardsImg[card.name] = pygame.transform.scale(pygame.image.load(f"{local_dir}/images/industry_cards/{card.name.value}.png"), (CARD_WIDTH, CARD_HEIGHT))
 
 
+        self.buildingImgs = {}
+        for buildingName in BuildingName:
+             self.buildingImgs[buildingName] = pygame.image.load(f"{local_dir}/images/buildings/{buildingName.value}.png")
 
+        self.industryMatImg = pygame.image.load(f"{local_dir}/images/components/industrymat.png")
+        
+        
+        # set build location coords
+        self.buildLocationCoords = {}
+        for town in self.game.board.towns:
+            for i, buildLocation in enumerate(town.buildLocations):
+                self.buildLocationCoords[buildLocation.id] = BUILDING_COORDS[town.name][i]
 
- 
+        
         self.game_log = ""
         self.game_log_target_rect = pygame.Rect(1140, 335, 560, 120)
         self.game_log_surface = pygame.Surface(self.game_log_target_rect.size)
         self.game_log_sftext = SFText(text=self.game_log, surface=self.game_log_surface,
                                       font_path=os.path.join(os.path.dirname(__file__), "sftext/example/resources"))
 
-
+        self.selected_card = None
+       
         self.screen.fill(self.BACKGROUND_COLOUR)
 
         self.reset()
 
         if self.interactive:
             self.run_event_loop(test=test)
+    
     def drawMoney(self):
         x = 10
         y = 10
-        rect = pygame.Rect(5, 5, 100, 100)
+        rect = pygame.Rect(5, 5, 130, 100)
         pygame.draw.rect(self.screen, WHITE, rect)
-        for player in self.game.board.players:
-            img =self.font.render(f"{player.name}: ${player.money}", True,  PLAYER_COLOR_MAP[player.color])
-            self.screen.blit(img, (x, y))
+
+        round_info = f"{self.game.turn}/{self.game.max_turns}"
+        card_info = f"{len(self.game.board.deck)}/{len(STARTING_CARDS[str(self.game.num_players)])}"
+        wild_card_info = f"{len(self.game.board.wildIndustryCards) + len(self.game.board.wildlocationCards)}/{self.game.num_players*2}"
+
+        
+        for info, value in zip(['Round', 'Cards', 'Wild Cards', 'Era'], [round_info, card_info, wild_card_info, self.game.board.era]):
+            info_text = self.font.render(f"{info}: {value}", True,  BLACK)
+            self.screen.blit(info_text, (x, y))
             y += 20
+    
+    def drawPlayers(self):
+        pass
+        # for i, player in enumerate(self.game.board.players):
+            
+    
+    def draw_player_industry_mat(self, mouse_click, mouse_pos):
+        player: Player = self.game.get_active_player()
+
+        # Determine the position for the action menu based on the screen size and image dimensions
+        mat_width, mat_height = self.industryMatImg.get_size()
+        screen_width, screen_height = self.screen.get_size()
+        menu_x = screen_width - mat_width   # 10 pixels padding from the right edge
+        menu_y = 0  # 10 pixels padding from the bottom edge
+
+        # Render the action menu image at the calculated position
+        self.screen.blit(self.industryMatImg, (menu_x, menu_y))
+        
+        
+        # for name in INDUSTRY_MAT_POSITIONS:
+        #     for level, coords in INDUSTRY_MAT_POSITIONS[name].items():
+        #         x, y = coords
+        #         img_rect = pygame.Rect(x - 25, y - 25, 50, 50)
+        #         pygame.draw.rect(self.screen, PLAYER_COLOR_MAP[player.color], img_rect)
+        #         lvl_text = self.font.render(f"{level}", True, BLACK)
+        #         self.screen.blit(lvl_text, coords)
+
+
+
+        # Draw action circles
+        # for action, (x, y) in ACTIONS.items():
+        #         pygame.draw.circle(self.screen, TAN, (x, y), 30)
+        
+        
+
+
+        # start_x = self.screen.get_width() - 300  # Adjust as needed
+        # start_y = 50  # Starting y position
+        # square_size = 40  # Size of the square for each building
+        # y_offset = 10  # Space between each building entry
+
+       
+
+        for industry_name, buildings in player.industryMat.items():
+            num_buildings = 0
+
+            for i in range(len(buildings)):
+                building: Building = buildings[i]
+
+               
+                
+                num_buildings += 1
+
+                if i < len(buildings)-1 and buildings[i+1].tier == building.tier:
+                    continue
+                
+               
+                x, y = INDUSTRY_MAT_POSITIONS[building.name][str(building.tier)]
+               
+
+                # Draw the square
+                img_rect = pygame.Rect(x - 25, y - 25, 50, 50)
+                pygame.draw.rect(self.screen, PLAYER_COLOR_MAP[player.color], img_rect)
+                
+                # lvl_text = self.font.render(f"{level}", True, BLACK)
+                # self.screen.blit(lvl_text, coords)
+
+                # Draw the building image
+                building_img = pygame.transform.scale(self.buildingImgs[building.name], (30, 30))
+                img_width, img_height = building_img.get_size()
+                img_x = x - 15
+                img_y = y - 15
+                self.screen.blit(building_img, (img_x, img_y))
+                
+                
+                num_text = self.font.render(f"{num_buildings}", True, BLACK)
+                self.screen.blit(num_text, (x-20, y-20))        
+
+
+                if isinstance(building, MarketBuilding) and building.beerCost > 0:
+                    beer_text = self.font.render(f"{building.beerCost}", True, ORANGE)
+                    self.screen.blit(beer_text, (x+15, y-20))   
+                
+                num_buildings = 0
+
+
+                # Render Resources 
+
+                # # Display costs on the left of the square
+                # iron_cost_text = self.font.render(str(building.ironCost), True, WHITE)
+                # coal_cost_text = self.font.render(str(building.coalCost), True, WHITE)
+                # money_cost_text = self.font.render(str(building.cost), True, WHITE)
+                # self.screen.blit(iron_cost_text, (square_x - 60, square_y))
+                # self.screen.blit(coal_cost_text, (square_x - 60, square_y + 15))
+                # self.screen.blit(money_cost_text, (square_x - 60, square_y + 30))
+
+                # # Display benefits on the right of the square
+                # vps_text = self.font.render(f"VPs: {building.victoryPointsGained}", True, WHITE)
+                # income_text = self.font.render(f"Inc: {building.incomeGained}", True, WHITE)
+                # self.screen.blit(vps_text, (square_x + square_size + 5, square_y))
+                # self.screen.blit(income_text, (square_x + square_size + 5, square_y + 15))
+
+                # # Adjust the y position for the next building
+                # current_y += square_size + y_offset
+                # # Adjust start_y for the next industry type
+                # start_y = current_y + 20  # Add some extra space between different industry types
+
+        # Check if there was a mouse click and if it was within the bounds of the action menu
+        
+
 
     def drawTradingPostBeer(self):
         for trade in self.game.board.tradePosts:
@@ -273,19 +482,19 @@ class Display:
         for i, location in enumerate(buildLocation.town.buildLocations):
             if buildLocation.id == location.id:
                 x, y = coords[i]
-        
-        rect = pygame.Rect(x-22, y-22, 50, 50)
-        
-        if buildLocation.building.isFlipped:
-            color = PLAYER_BUILDING_RETIRED_COLOR_MAP[buildLocation.building.owner.color]
-            textColor = GREY
-        else:
-            color = PLAYER_COLOR_MAP[buildLocation.building.owner.color]
-            textColor = WHITE
 
-        pygame.draw.rect(self.screen, color, rect)
-        img = self.font.render(f"{buildLocation.building.name.value}", True, textColor)
-        self.screen.blit(img, (x-23, y-10))
+        # Define the building image and rect for it
+        building_img = self.buildingImgs[buildLocation.building.name]
+        img_rect = pygame.Rect(x - 22, y - 22, 50, 50)  # Adjust as needed for your images
+
+        # Draw background color based on whether the building is flipped
+        if buildLocation.building.isFlipped:
+            background_color = (128, 128, 128)  # Half black (grey) to indicate flipped
+        else:
+            background_color = PLAYER_COLOR_MAP[buildLocation.building.owner.color]
+
+        pygame.draw.rect(self.screen, background_color, img_rect)
+        self.screen.blit(building_img, (x - 22, y - 22))  # Adjust as needed
 
     def drawCoal(self):
         for i in range(self.game.board.coalMarketRemaining):
@@ -314,32 +523,72 @@ class Display:
         for i in range(len(self.game.board.deck.cards)):
             self.screen.blit(self.greyCard, (x-(i*.5)-90, y-(i*.5)-70))
             # pygame.draw.circle(self.screen, WHITE, (x, y), 5)
+    def drawActionMenu(self, mouse_click, mouse_pos):
+         # Determine the position for the action menu based on the screen size and image dimensions
+        menu_width, menu_height = self.action_menu_img.get_size()
+        screen_width, screen_height = self.screen.get_size()
+        menu_x = screen_width - menu_width + 120  # 10 pixels padding from the right edge
+        menu_y = screen_height - menu_height - 10  # 10 pixels padding from the bottom edge
 
-    def drawHand(self):
+        # Render the action menu image at the calculated position
+        self.screen.blit(self.action_menu_img, (menu_x, menu_y))
+        
+        # Draw action circles
+        # for action, (x, y) in ACTIONS.items():
+        #         pygame.draw.circle(self.screen, TAN, (x, y), 30)
+        
+        # Check if there was a mouse click and if it was within the bounds of the action menu
+        if mouse_click:
+            # print(f"Pos ", mouse_pos)
+            for action, (x, y) in ACTIONS.items():
+                dist = ((mouse_pos[0] - x) ** 2 + (mouse_pos[1] - y) ** 2) ** 0.5
+                if dist <= 30:  # Assuming the action buttons have a radius of 68 pixels
+                    self.handle_action(action=action)
+                    break  # Stop checking after the first match to avoid multiple actions being triggered
 
-        active_player: Player = self.game.players[self.game.players_go]    
+    def drawHand(self, mouse_click, mouse_pos):
+
+        active_player: Player = self.game.get_active_player()   
         card_offset_x = 50  # Initial X offset from left; adjust as needed
-        card_offset_y = self.screen.get_height() - (CARD_HEIGHT // 2)  # Adjust Y to bottom
+        card_offset_y = self.screen.get_height() - (CARD_HEIGHT // 2)   # Adjust Y to bottom
         card_spacing = CARD_WIDTH - 30  # Overlap cards; adjust as needed
 
         mouse_x, mouse_y = pygame.mouse.get_pos()
         for i, card in enumerate(active_player.hand.cards):
-            print(i+1, ' Card - ', card)
-            card_rect = pygame.Rect(card_offset_x + i * card_spacing, card_offset_y, CARD_WIDTH, CARD_HEIGHT)
 
+            cardUsed = False
+            # display possible card choices
+            if self.game_state == GameState.CARD_CHOICE and self.current_action['building'] and self.current_action['buildLocation'] and active_player.canUseCardForBuilding(building=self.current_action['building'], buildLocation=self.current_action['buildLocation'], card=card):
+                print(f"Can use card {card.name} with id {card.id} for building {self.current_action['building'].name} in {self.current_action['buildLocation'].town.name}", end=' ')
+                if isinstance(card, IndustryCard):
+                    print(f"because it has the following possible builds {self.current_action['buildLocation'].possibleBuilds}", end=' ' )
+                print()
+                card_offset_y = self.screen.get_height() - math.ceil(CARD_HEIGHT * 0.75) 
+                cardUsed = True
+            else:
+                card_offset_y = self.screen.get_height() - (CARD_HEIGHT // 2)
+            # print(i+1, ' Card - ', card)
+            
+            
+            card_rect = pygame.Rect(card_offset_x + i * card_spacing, card_offset_y, CARD_WIDTH, CARD_HEIGHT)
+            
+            
             # Draw the card image based on card type
             if isinstance(card, LocationCard):
+
                 # Use specific color image for LocationCards
-                card_image = self.locationCardsImg[card.getColor()]
+                card_image = self.locationCardsImg[card.getColor()] if not card.isWild else self.wildLocationImg
                 self.screen.blit(card_image, card_rect.topleft)
-                # Draw card name
-                name_text = self.font.render(card.name.upper(), True, WHITE)
-                text_rect = name_text.get_rect(center=(card_rect.x + CARD_WIDTH // 2, card_rect.y + 10))
-                # pygame.draw.rect(self.screen, PLAYER_COLOR_MAP[card.getColor().name], card_rect)
-                self.screen.blit(name_text, text_rect)
+                
+                if not card.isWild:
+                    # Draw card name
+                    name_text = self.font.render(card.name.upper(), True, WHITE)
+                    text_rect = name_text.get_rect(center=(card_rect.x + CARD_WIDTH // 2, card_rect.y + 10))
+                    # pygame.draw.rect(self.screen, PLAYER_COLOR_MAP[card.getColor().name], card_rect)
+                    self.screen.blit(name_text, text_rect)
             elif isinstance(card, IndustryCard):
                 # Use pre-loaded image for IndustryCards
-                card_image = self.industryCardsImg[card.name]
+                card_image = self.industryCardsImg[card.name] if not card.isWild else self.wildLocationImg
                 self.screen.blit(card_image, card_rect.topleft)
                 # pygame.draw.rect(self.screen, BLACK, card_rect)
 
@@ -352,6 +601,11 @@ class Display:
                 # Redraw the name for LocationCards to ensure visibility
                 if isinstance(card, LocationCard):
                     self.screen.blit(name_text, (raised_rect.x + (CARD_WIDTH - text_rect.width) // 2, raised_rect.y + 10))
+            # Check for mouse click on this card
+            if mouse_click and card_rect.collidepoint(mouse_pos) and self.game_state == GameState.CARD_CHOICE:
+                print(f'Clicked on card: {card.name} of type {type(card).__name__} and id {card.id}')
+                if cardUsed:
+                    self.current_action['card'] = card
 
     def drawResourcesOnBuildings(self):
         for building in self.game.board.getCoalBuildings():
@@ -380,8 +634,7 @@ class Display:
                 
             startX = x
 
-            print(building)
-            print(building.resourcesType.name)
+        
             assert building.resourcesType.name == "iron"
             for i in range(building.resourceAmount):
                 if i > 0 and i % 3 == 0:
@@ -411,6 +664,7 @@ class Display:
 
 
     def reset(self):
+        self.current_action = {}
         self.active_other_player = []
         self.active_receive_res = []
         self.active_trade_res = []
@@ -421,6 +675,7 @@ class Display:
         self.game_log_sftext.text = ""
         self.game_log_sftext.parse_text()
         self.message_count = 0
+        self.game_state = GameState.NO_SELECTION
 
     def update_game_log(self, message):
         self.message_count += 1
@@ -428,6 +683,35 @@ class Display:
         message_to_add = "{style}{color "+str(color)+"}"+str(self.message_count) + ". " + message["text"] + "\n"
         self.game_log_sftext.text = message_to_add + self.game_log_sftext.text
         self.game_log_sftext.parse_text()
+
+    
+
+    def handle_action(self, action):
+        print(f"Action {action} clicked.")
+        if not self.game_state == GameState.NO_SELECTION:
+            return
+        
+
+
+        if action == "BUILD":
+            self.game_state = GameState.TOWN_CHOICE
+            self.current_action = {
+                'type': ActionTypes.BuildIndustry,
+            }
+
+    def apply_action(self, player: Player):
+        if not self.current_action:
+            return
+        
+        if self.current_action['type'] == ActionTypes.BuildIndustry:
+            if not self.current_action['building'] or not self.current_action['buildLocation']:
+                return
+            player.buildBuilding(self.current_action['building'].name, self.current_action['buildLocation'], self.current_action['card'])
+            same_player = self.game.next_action(self.current_action)
+            if same_player:
+                self.game_state = GameState.SECOND_ACTION
+            else:
+                self.game_state = GameState.NO_SELECTION
 
     # def construct_outer_board_polygon(self):
     #     base_positions = np.array([self.scaled_corner_pos[corner.id] for corner in self.game.board.corners \
@@ -460,7 +744,7 @@ class Display:
         self.game_log_sftext.post_update()
         pygame.event.pump()
     
-    def render_board(self):
+    def render_board(self, mouse_click=False, mouse_pos=(0, 0)):
         self.screen.blit(self.img, (0, 0))
         self.drawCoal()
         self.drawIron()
@@ -471,65 +755,79 @@ class Display:
         self.drawTradingPostBeer()
         self.drawMoney()
         self.drawResourcesOnBuildings()
-        self.drawHand()
+        self.drawPlayers()
+        self.drawHand(mouse_click=mouse_click, mouse_pos=mouse_pos)
+        self.drawActionMenu(mouse_click=mouse_click, mouse_pos=mouse_pos)
+        self.draw_player_industry_mat(mouse_click=mouse_click, mouse_pos=mouse_pos)
         pygame.display.update()
     
+    
+
+
     def run_event_loop(self, test=False):
         run = True
+        mouse_click = False
+        mouse_pos = (0, 0)  # Initialize mouse_pos
 
-        # if self.policies is not None:
-        #     self.initialise_AI()
+        active_player: Player = self.game.get_active_player()
+        builds, firstBuildings, availableBuildLocations = active_player.getAvailableBuilds()
 
+        turn = self.game.turn 
+
+        next_action = False
         while run:
             pygame.time.delay(150)
-            Tk().wm_withdraw()
-            self.screen.fill(self.BACKGROUND_COLOUR)
-            # self.draw_invisible_edges()
-            # if self.game.can_move_robber:
-            #     self.draw_invisible_hexagons()
-            # else:
-            #     self.invisible_hexagons = []
-            #     self.invisible_hexagon_points = []
-            self.render_board()
+            Tk().wm_withdraw()  # Hide the main tkinter window
 
+            # Reset mouse_click at the beginning of each loop iteration
             mouse_click = False
-            over_corner = False
-            over_edge = False
-
-            # if test:
-            #     players_go = self.get_players_turn()
-            #     if isinstance(self.policies[players_go], str):
-            #         pass
-            #     else:
-            #         done = self.step_AI()
-            #         if done:
-            #             break
-
-            #         pygame.display.update()
-            #         self.game_log_sftext.post_update()
-            #         pygame.event.pump()
-            #         continue
 
             for event in pygame.event.get():
                 if event.type == pygame.QUIT:
                     run = False
                 elif event.type == pygame.MOUSEBUTTONUP:
                     mouse_click = True
-                    print('Click coords = ', pygame.mouse.get_pos())
-                elif event.type == pygame.MOUSEBUTTONDOWN:
-                    if event.button <= 3:
-                        pass
-                    else:
-                        mouse_pos = pygame.mouse.get_pos()
-                        print('Click coords = ', mouse_pos)
-                        if self.game_log_target_rect.collidepoint(*mouse_pos):
-                            self.game_log_sftext.on_mouse_scroll(event)
+                    mouse_pos = pygame.mouse.get_pos()  # Update mouse_pos on click
+                    print(f"Mouse click at {mouse_pos}")
 
-            players_go = self.game.board.players[0]
-            mouse_pos = pygame.mouse.get_pos()
+            
 
 
-
+            self.screen.fill(self.BACKGROUND_COLOUR)
+            # Pass mouse_click and mouse_pos to render_board
+            self.render_board(mouse_click=mouse_click, mouse_pos=mouse_pos)
+            
+            # display info for diff player
+            if next_action or self.game_state or self.game.get_active_player().id != active_player.id or self.game.turn != turn:
+                active_player: Player = self.game.get_active_player()
+                builds, firstBuildings, availableBuildLocations = active_player.getAvailableBuilds()
+                next_action = False
+            
+            
+            if self.game_state == GameState.TOWN_CHOICE:
+                for bl in availableBuildLocations:
+                    x, y = self.buildLocationCoords[bl.id]
+                    blRect = pygame.Rect(x - 24, y - 24, 52, 52)
+                    pygame.draw.rect(self.screen, GREEN, blRect, 3, 1)
+                    if mouse_click and blRect.collidepoint(mouse_pos[0], mouse_pos[1]):
+                        self.current_action['buildLocation']: BuildLocation = bl
+                        self.game_state = GameState.BUILDING_CHOICE
+            elif self.game_state == GameState.BUILDING_CHOICE and self.current_action['buildLocation']:
+                buildLocation: BuildLocation = self.current_action['buildLocation']
+                for building in firstBuildings:
+                    if not building.name in buildLocation.possibleBuilds:
+                        continue
+                    x, y = INDUSTRY_MAT_POSITIONS[building.name][str(building.tier)]
+               
+                    # Draw the square
+                    building_selection_rect = pygame.Rect(x - 25, y - 25, 50, 50)
+                    pygame.draw.rect(self.screen, GREEN, building_selection_rect, 3, 1)
+                    if mouse_click and building_selection_rect.collidepoint(mouse_pos[0], mouse_pos[1]):
+                        self.current_action['building'] = building
+                        self.game_state = GameState.CARD_CHOICE
+            elif self.game_state == GameState.CARD_CHOICE and 'card' in self.current_action:
+                self.apply_action(active_player)
+                next_action = True
 
             pygame.display.update()
             self.game_log_sftext.post_update()

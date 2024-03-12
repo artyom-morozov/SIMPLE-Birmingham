@@ -60,11 +60,11 @@ GLOUCESTER = "Gloucester"
 # merchant tiles
 MERCHANT_TILES = {
     "2": [
+        MerchantName.blank,
         MerchantName.all,
-        MerchantName.blank,
-        MerchantName.blank,
         MerchantName.cotton,
         MerchantName.goods,
+        MerchantName.blank,
     ],
     "3": [
         MerchantName.all,

@@ -5,6 +5,15 @@ class Era(Enum):
     canal = "canal"
     railroad = "railroad"
 
+class GameState(Enum):
+    CARD_CHOICE = 0
+    DEVELOP_CHOICE = 1
+    BUILDING_CHOICE = 2
+    TOWN_CHOICE = 3
+    ROAD_CHOICE = 4
+    NO_SELECTION = 5
+    SCOUT_CHOICE = 6
+    SECOND_ACTION = 7
 
 class PlayerId(IntEnum):
     Red = 1

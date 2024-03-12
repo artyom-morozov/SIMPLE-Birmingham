@@ -23,6 +23,9 @@ class Deck:
     def shuffle(self):
         random.shuffle(self.cards)
 
+    def __len__(self):
+        return len(self.cards)
+
     def draw(self, num=1) -> List[Card]:
         output = []
         discarded = 0

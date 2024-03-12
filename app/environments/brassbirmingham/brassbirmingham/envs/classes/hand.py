@@ -1,4 +1,4 @@
-from typing import List
+from typing import List, Set
 
 from python.id import id
 
@@ -14,6 +14,7 @@ class Hand:
 
     def __init__(self, cards: List[Card]):
         self.id = id()
+        self.cardIds: Set[str] = set()
         self.cards: List[Card] = cards
         self.discard = []
 

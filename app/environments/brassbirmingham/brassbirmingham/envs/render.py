@@ -136,7 +136,7 @@ CARD_HEIGHT = 180
 
 
 class Render:
-	def __init__(self, board=None, callback=None, x=0, y=0):
+	def __init__(self, board: Board=None, callback=None, x=0, y=0):
 		local_dir = os.path.dirname(__file__)
 		self.board = board
 		self.callback = callback
@@ -147,6 +147,10 @@ class Render:
 		self.goldCard = pygame.transform.scale(self.goldCard, (CARD_WIDTH, CARD_HEIGHT))
 		self.greyCard = pygame.transform.rotate(self.greyCard, 90)
 		self.goldCard = pygame.transform.rotate(self.goldCard, 90)
+		self.merchantImages = {}
+		for tileName in self.board.merchantTiles:
+			self.merchantImages[tileName] = pygame.transform.scale(pygame.image.load(f"{local_dir}/classes/ui/images/trade_posts/merchants/merchant_{tileName.value}.png"), (48, 50))
+		
 		self.win = pygame.display.set_mode((WIDTH, HEIGHT))
 		self.x = x
 		self.y = y
@@ -177,30 +181,20 @@ class Render:
 
 	def drawTradingPostBeer(self):
 		for trade in self.board.tradePosts:
-			coords = BEER_COORDS[trade.name]
-			if trade.beerAmount > 0:
-				pygame.draw.circle(self.win, TAN, coords[0], BEER_SIZE)
-			if trade.beerAmount > 1:
-				pygame.draw.circle(self.win, TAN, coords[1], BEER_SIZE)
+			for i, merchant in enumerate(trade.merchantTiles):
+				coords = BEER_COORDS[trade.name][i]
+				if merchant.hasBeer:
+					pygame.draw.circle(self.win, TAN, coords, BEER_SIZE)
+
 
 	def drawMerchantTiles(self):
 		for trade in self.board.tradePosts:
-			coords = TRADE_POST_COORDS[trade.name]
-			if len(trade.merchantTiles) > 0:
-				x, y = coords[0]
-				
-				rect = Rect(x, y, 30, 30)
-				pygame.draw.rect(self.win, BLUE, rect)
-				img = font.render(f"{trade.merchantTiles[0].value}", True, WHITE)
-				self.win.blit(img, (x-23, y))
-
-			if len(trade.merchantTiles) > 1:
-				x, y = coords[1]
-				
-				rect = Rect(x, y, 30, 30)
-				pygame.draw.rect(self.win, BLUE, rect)
-				img = font.render(f"{trade.merchantTiles[1].value}", True, WHITE)
-				self.win.blit(img, (x-23, y))
+			for i, merchant in enumerate(trade.merchantTiles):
+				x, y = TRADE_POST_COORDS[trade.name][i]
+				# rect = pygame.Rect(x, y, 30, 30)
+				# pygame.draw.rect(self.screen, BLUE, rect)
+				# img = self.font.render(f"{merchant.name.value}", True, WHITE)
+				self.win.blit(self.merchantImages[merchant.name], (x, y))
 
 	def drawRoads(self):
 		for i, road in enumerate(self.board.roadLocations):

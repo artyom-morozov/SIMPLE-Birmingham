@@ -5,7 +5,6 @@ from collections import defaultdict, deque
 
 from classes.enums import Era, PlayerId
 from classes.player import Player
-from classes.ui.display import Display
 
 from .board import Board
 
@@ -29,34 +28,43 @@ class Game:
         self.interactive = interactive
         self.debug_mode = debug_mode
         self.policies = policies
+        self.players_go_index = 0
+
         if interactive:
-            self.display = Display(self, interactive=interactive, debug_mode=debug_mode, policies=policies)
+            self.display = self.initDisplay(interactive, debug_mode, policies)
         else:
             self.display = None
+        
+        
+
+
 
     def render(self):
         if self.display is None:
-            self.display = Display(self, interactive=self.interactive, debug_mode=self.debug_mode)
+            self.display = self.initDisplay(self.interactive, self.debug_mode, self.policies)
 
         self.display.render()
     
+    def initDisplay(self, interactive, debug_mode, policies):
+        from classes.ui.display import Display as GameDisplay
+        return GameDisplay(self, interactive=interactive, debug_mode=debug_mode, policies=policies)
+
     def reset(self):
         self.board = Board(self.num_players)
         self.players = {}
-
-
+        self.action_history = defaultdict(list)
+        self.turn = 1
         for color in PLAYER_COLORS[:self.num_players]:
             id = PlayerId[color]
             self.players[id] = Player(name=PLAYER_NAMEES[id-1], board=self.board, playerId=id)
 
-
         # set player order
         self.players_go = self.board.orderPlayers(random=True)
+        self.players_go_index = 0
         
         self.first_round = True
         self.player_has_to_liquidate = False
         self.players_to_liquidate = []
-        self.turn = 0
 
 
 
@@ -81,6 +89,22 @@ class Game:
         else:
             # Points greater than 99 return 30
             return 30
+
+    def next_action(self, action):
+        # if self.interactive:
+        #     self.display.render()
+        player = self.get_active_player()
+        self.save_action(player.id, action)
+
+        if len(self.action_history[(self.turn, player.id)]) == self.get_num_actions():
+            self.players_go_index += 1
+            if self.players_go_index == self.num_players:
+                self.players_go_index = 0
+                self.start_new_turn()
+            return False
+        return True
+
+        
 
     def start_new_turn(self):
         # check if end game/ era change
@@ -115,11 +139,23 @@ class Game:
 
 
         
-
+        if self.turn == 1:
+            self.first_round = False
 
         self.turn += 1
-        
-    
+
+    # Return active player instance
+    def get_active_player(self) -> Player:
+        try:
+            return self.board.players[self.players_go_index]
+        except:
+            print("Error: no active player")
+            return None
+
+    # return num actions available to the player right now
+    def get_num_actions(self):
+        return 1 if self.first_round else 2
+
     def save_current_state(self):
 
         state = {}
@@ -199,7 +235,9 @@ class Game:
         # state["die_2"] = self.die_2
 
         # return state
-
+    def save_action(self, player_id: str, action: dict):
+        self.action_history[(self.turn, player_id)].append(action)
+            
     def restore_state(self, state):
 
         state = copy.deepcopy(state) #prevent state being changed
