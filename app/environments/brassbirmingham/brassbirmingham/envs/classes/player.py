@@ -108,6 +108,7 @@ class Player:
     :param int: amount to pay
     """
     def pay(self, amount: int):
+        print('Paying', amount, ' current money is ', self.money)
         self.money -= amount
         assert self.money >= 0
         self.spentThisTurn += amount
@@ -746,7 +747,6 @@ class Player:
         pass
 
     def isCardInHand(self, card: Card):
-        print('Hand Cards ', [_card.id for _card in self.hand.cards])
         return card.id in [_card.id for _card in self.hand.cards]
     
     def canUseCardForBuilding(self, building: Building, buildLocation: BuildLocation, card: Card):
@@ -838,6 +838,7 @@ class Player:
 
             if len(ironSources) == 0:
                 ironCost += self.board.priceForIron(building.ironCost)
+                self.board.ironMarketRemaining = max(self.board.ironMarketRemaining - building.ironCost, 0)
             elif len(ironSources)  < 2:
                 if  building.ironCost <= ironSources[0].resourceAmount :
                     ironSources[0].decreaseResourceAmount(building.ironCost)
@@ -848,7 +849,7 @@ class Player:
                     self.board.ironMarketRemaining = max(self.board.ironMarketRemaining - diff, 0)
             else:
                 for ironSource in ironSources:
-                    ironSource.decreaseResourceAmount(building.ironCost)
+                    ironSource.decreaseResourceAmount(1)
         self.pay(building.cost + ironCost + coalCost)
         self.currentBuildings.add(building)
         self.industryMat[industryName].pop(-1)

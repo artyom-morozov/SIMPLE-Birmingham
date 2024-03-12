@@ -37,6 +37,28 @@ PURPLE = (92, 6, 186)
 
 BEER_SIZE = 12
 
+def printRoman(num):
+    # Storing roman values of digits from 0-9
+    # when placed at different places
+    m = ["", "M", "MM", "MMM"]
+    c = ["", "C", "CC", "CCC", "CD", "D",
+         "DC", "DCC", "DCCC", "CM "]
+    x = ["", "X", "XX", "XXX", "XL", "L",
+         "LX", "LXX", "LXXX", "XC"]
+    i = ["", "I", "II", "III", "IV", "V",
+         "VI", "VII", "VIII", "IX"]
+ 
+    # Converting to roman
+    thousands = m[num // 1000]
+    hundreds = c[(num % 1000) // 100]
+    tens = x[(num % 100) // 10]
+    ones = i[num % 10]
+ 
+    ans = (thousands + hundreds +
+           tens + ones)
+ 
+    return ans
+
 PLAYER_COLOR_MAP = {
 	"Red": RED,
 	"Blue": BLUE,
@@ -329,9 +351,30 @@ class Display:
             y += 20
     
     def drawPlayers(self):
-        pass
-        # for i, player in enumerate(self.game.board.players):
-            
+        for i, player in reversed(list(enumerate(self.game.board.players))):
+            x, y = PLAYER_POSITIONS[i]
+
+            left = 0
+            top = y - 50
+
+            rect = pygame.Rect(left, top, 170, 105)
+            pygame.draw.rect(self.screen, WHITE, rect)
+
+            text_y = top + 5
+
+            name_text = self.font.render(f"{player.name}", True,  PLAYER_COLOR_MAP[player.color])
+            vps = self.font.render(f"VPs: {player.victoryPoints}", True, PLAYER_COLOR_MAP[player.color])
+            income = self.font.render(f"Income: {player.incomeLevel()}", True, PLAYER_COLOR_MAP[player.color])
+            money = self.font.render(f"Money: {player.money}", True, PLAYER_COLOR_MAP[player.color])
+            spending = self.font.render(f"Spent This Turn: {player.spentThisTurn}", True, PLAYER_COLOR_MAP[player.color])
+
+            for text in [name_text, vps, income, money, spending]:
+                self.screen.blit(text, (left + 10, text_y))
+                text_y += 20
+
+            # draw border if the player is active
+            if player == self.game.get_active_player():
+                pygame.draw.rect(self.screen, PLAYER_COLOR_MAP[player.color], rect, 3)
     
     def draw_player_industry_mat(self, mouse_click, mouse_pos):
         player: Player = self.game.get_active_player()
@@ -484,17 +527,32 @@ class Display:
                 x, y = coords[i]
 
         # Define the building image and rect for it
-        building_img = self.buildingImgs[buildLocation.building.name]
+        building = buildLocation.building
+        if building is None or not building.isActive:
+            return
+
+        building_img = pygame.transform.scale(self.buildingImgs[building.name], (30, 30))
+        img_width, img_height = building_img.get_size()
+        img_x = x - 15
+        img_y = y - 15
+        
+        
+        lvl_text = self.font.render(f"{printRoman(building.tier)}", True, BLACK)
+
+
         img_rect = pygame.Rect(x - 22, y - 22, 50, 50)  # Adjust as needed for your images
 
+        
+        pygame.draw.rect(self.screen, PLAYER_COLOR_MAP[buildLocation.building.owner.color], img_rect)
         # Draw background color based on whether the building is flipped
         if buildLocation.building.isFlipped:
-            background_color = (128, 128, 128)  # Half black (grey) to indicate flipped
-        else:
-            background_color = PLAYER_COLOR_MAP[buildLocation.building.owner.color]
+            black_rect = pygame.Rect(x - 22, y - 22, 50, 25)  
+            pygame.draw.rect(self.screen, BLACK, black_rect)
 
-        pygame.draw.rect(self.screen, background_color, img_rect)
-        self.screen.blit(building_img, (x - 22, y - 22))  # Adjust as needed
+        # render image and level text
+        self.screen.blit(building_img, (img_x, img_y))  # Adjust as needed
+        self.screen.blit(lvl_text, (x+17, y+12))            
+
 
     def drawCoal(self):
         for i in range(self.game.board.coalMarketRemaining):
@@ -559,10 +617,10 @@ class Display:
             cardUsed = False
             # display possible card choices
             if self.game_state == GameState.CARD_CHOICE and self.current_action['building'] and self.current_action['buildLocation'] and active_player.canUseCardForBuilding(building=self.current_action['building'], buildLocation=self.current_action['buildLocation'], card=card):
-                print(f"Can use card {card.name} with id {card.id} for building {self.current_action['building'].name} in {self.current_action['buildLocation'].town.name}", end=' ')
-                if isinstance(card, IndustryCard):
-                    print(f"because it has the following possible builds {self.current_action['buildLocation'].possibleBuilds}", end=' ' )
-                print()
+                # print(f"Can use card {card.name} with id {card.id} for building {self.current_action['building'].name} in {self.current_action['buildLocation'].town.name}", end=' ')
+                # if isinstance(card, IndustryCard):
+                #     print(f"because it has the following possible builds {self.current_action['buildLocation'].possibleBuilds}", end=' ' )
+                # print()
                 card_offset_y = self.screen.get_height() - math.ceil(CARD_HEIGHT * 0.75) 
                 cardUsed = True
             else:
@@ -603,7 +661,7 @@ class Display:
                     self.screen.blit(name_text, (raised_rect.x + (CARD_WIDTH - text_rect.width) // 2, raised_rect.y + 10))
             # Check for mouse click on this card
             if mouse_click and card_rect.collidepoint(mouse_pos) and self.game_state == GameState.CARD_CHOICE:
-                print(f'Clicked on card: {card.name} of type {type(card).__name__} and id {card.id}')
+                # print(f'Clicked on card: {card.name} of type {type(card).__name__} and id {card.id}')
                 if cardUsed:
                     self.current_action['card'] = card
 
@@ -826,6 +884,8 @@ class Display:
                         self.current_action['building'] = building
                         self.game_state = GameState.CARD_CHOICE
             elif self.game_state == GameState.CARD_CHOICE and 'card' in self.current_action:
+                print(f"Should apply action now")
+                print(f"{self.current_action}")
                 self.apply_action(active_player)
                 next_action = True
 

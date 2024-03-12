@@ -598,7 +598,6 @@ class Board:
     def buildBuilding(
         self, building: Building, buildLocation: BuildLocation, player: Player
     ):
-        player.pay(building.cost)
         # build building - link building and buildLocation to each other
         buildLocation.addBuilding(building)
         building.build(buildLocation)
