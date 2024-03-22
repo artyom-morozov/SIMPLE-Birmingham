@@ -5,6 +5,9 @@ from typing import Deque, List, Tuple
 import pygame
 import os
 import sys
+import objgraph
+import tracemalloc
+
 
 from classes.buildings.industry_building import IndustryBuilding
 from classes.game import Game as GameModule
@@ -21,8 +24,10 @@ from classes.buildings.enums import BuildingName
 from scipy.spatial.distance import pdist, squareform
 from classes.trade_post import Merchant
 from classes.ui.sftext.sftext import SFText
+
 from consts import STARTING_CARDS
-from tkinter import messagebox, Tk
+
+# from tkinter import messagebox, Tk
 import numpy as np
 
 WIDTH = 1200
@@ -39,25 +44,6 @@ TAN = (229, 156, 91)
 PURPLE = (92, 6, 186)
 
 BEER_SIZE = 12
-
-
-def printRoman(num):
-    # Storing roman values of digits from 0-9
-    # when placed at different places
-    m = ["", "M", "MM", "MMM"]
-    c = ["", "C", "CC", "CCC", "CD", "D", "DC", "DCC", "DCCC", "CM "]
-    x = ["", "X", "XX", "XXX", "XL", "L", "LX", "LXX", "LXXX", "XC"]
-    i = ["", "I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX"]
-
-    # Converting to roman
-    thousands = m[num // 1000]
-    hundreds = c[(num % 1000) // 100]
-    tens = x[(num % 100) // 10]
-    ones = i[num % 10]
-
-    ans = thousands + hundreds + tens + ones
-
-    return ans
 
 
 PLAYER_COLOR_MAP = {
@@ -365,6 +351,18 @@ class Display:
         self.mouse_click = False
         self.mouse_pos = (0, 0)
 
+        # Game Log
+        self.game_log = ""
+        self.game_log_target_rect = pygame.Rect(1280, 664, 560, 120)
+        self.game_log_surface = pygame.Surface(self.game_log_target_rect.size)
+        self.game_log_sftext = SFText(
+            text=self.game_log,
+            surface=self.game_log_surface,
+            font_path=os.path.join(
+                os.path.dirname(__file__), "sftext/example/resources"
+            ),
+        )
+
         self.reset()
 
         if self.interactive:
@@ -584,7 +582,23 @@ class Display:
                 # 	img = self.font.render(f"{road.towns[0].name}, {road.towns[1].name}", True, RED)
                 # self.screen.blit(img, (x, y))
             if (
+                "road" in self.current_action
+                and self.current_action["road"] == road
+                or (
+                    "road1" in self.current_action
+                    and self.current_action["road1"] == road
+                )
+                or (
+                    "road2" in self.current_action
+                    and self.current_action["road2"] == road
+                )
+            ):
+                pygame.draw.circle(self.screen, GREEN, coords, 20, 3)
+
+            if (
                 self.game_state == GameState.ROAD_CHOICE
+                and "type" in self.current_action
+                and self.current_action["type"] == ActionTypes.PlaceCanal
                 and not "road" in self.current_action
                 and road in self.availableRoads
             ):
@@ -593,7 +607,7 @@ class Display:
                     print("clicked on road", road)
                     self.current_action["road"] = road
                     self.mouse_click = False
-                    self.game_state = GameState.CARD_CHOICE
+                    self.game_state = GameState.END_ACTION
 
     def drawBuildings(self):
         for town in self.game.board.towns:
@@ -612,7 +626,9 @@ class Display:
 
         # Define the building image and rect for it
         building = buildLocation.building
-        if building is None or not building.isActive:
+        if (building is None or not building.isActive) and not self.current_action.get(
+            "building", None
+        ) == building:
             return
 
         building_img = pygame.transform.scale(
@@ -622,7 +638,7 @@ class Display:
         img_x = x - 15
         img_y = y - 15
 
-        lvl_text = self.font.render(f"{printRoman(building.tier)}", True, BLACK)
+        lvl_text = self.font.render(f"{building.getTier()}", True, BLACK)
 
         img_rect = pygame.Rect(
             x - 22, y - 22, 50, 50
@@ -695,13 +711,7 @@ class Display:
                     self.handle_action(action=action)
                     break  # Stop checking after the first match to avoid multiple actions being triggered
         # If the game state is DEVELOP2_CHOICE, render the confirm and cancel buttons
-        if (
-            self.game_state == GameState.DEVELOP2_CHOICE
-            or self.game_state == GameState.LOAN_CHOICE
-            or self.game_state == GameState.PASS_CHOICE
-            or self.game_state == GameState.SCOUT_CHOICE
-            or self.game_state == GameState.SELL_CHOICE
-        ):
+        if self.game_state != GameState.NO_SELECTION:
             # Define the button dimensions and positions
             button_width, button_height = 100, 50  # Adjust as needed
             confirm_button_x, confirm_button_y = 1375 - button_width // 2, 1255
@@ -756,6 +766,7 @@ class Display:
                         self.game_state == GameState.LOAN_CHOICE
                         or self.game_state == GameState.PASS_CHOICE
                         or self.game_state == GameState.SCOUT_CHOICE
+                        or self.game_state == GameState.END_ACTION
                     ):
                         self.apply_action()
 
@@ -776,11 +787,7 @@ class Display:
                         and self.buildingsBeerPairs > 0
                     ):
                         self.reset_action()
-                    elif (
-                        self.game_state == GameState.LOAN_CHOICE
-                        or self.game_state == GameState.PASS_CHOICE
-                        or self.game_state == GameState.SCOUT_CHOICE
-                    ):
+                    else:
                         self.reset_action()
 
     def drawHand(self, mouse_click, mouse_pos):
@@ -951,7 +958,7 @@ class Display:
                 rect = pygame.Rect(x - 2, y - 2, 52, 52)
                 pygame.draw.rect(self.screen, GREEN, rect, 2)
                 if self.mouse_click and rect.collidepoint(self.mouse_pos):
-                    self.currentBeers.add(building)
+                    self.currentBeers.append(building)
                     self.currentBeerCost -= 1
                     self.mouse_click = False
                     self.game_state = GameState.BEER_CHOICE
@@ -980,6 +987,8 @@ class Display:
         self.game_state = GameState.NO_SELECTION
         self.availableRoads = set()
         self.availableBuils = set()
+        self.game_log_sftext.text = ""
+        self.game_log_sftext.parse_text()
 
     def reset_action(self):
         self.current_action = {}
@@ -1004,7 +1013,7 @@ class Display:
 
     def update_game_log(self, message):
         self.message_count += 1
-        color = self.road_colours[message["player_id"]]
+        color = PLAYER_COLOR_MAP[message["player_id"].name]
         message_to_add = (
             "{style}{color "
             + str(color)
@@ -1019,16 +1028,31 @@ class Display:
 
     def handle_action(self, action):
         print(f"Action {action} clicked.")
+        print(
+            f"Current action {self.current_action}. Current game state {self.game_state}."
+        )
         if not self.game_state == GameState.NO_SELECTION:
             return
 
         if action == "BUILD":
+            if len(self.availableBuils) == 0:
+                print("Cant build any buildings")
+                return
             self.game_state = GameState.TOWN_CHOICE
             self.current_action = {
                 "type": ActionTypes.BuildIndustry,
             }
         elif action == "ROAD":
-            self.game_state = GameState.ROAD_CHOICE
+            if len(self.availableRoads) == 0 or (
+                self.game.board.era == Era.canal
+                and not self.active_player.canAffordCanal()
+                or self.game.board.era == Era.railroad
+                and not self.active_player.canAffordOneRailroad()
+            ):
+                print("Cant build any roads")
+                return
+
+            self.game_state = GameState.CARD_CHOICE
             self.current_action = {
                 "type": (
                     ActionTypes.PlaceCanal
@@ -1036,7 +1060,11 @@ class Display:
                     else ActionTypes.PlaceRailRoad
                 ),
             }
+
         elif action == "DEVELOP":
+            if not self.active_player.canAffordOneDevelop():
+                print("Cant develop")
+                return
             self.game_state = GameState.CARD_CHOICE
             self.current_action = {
                 "type": ActionTypes.DevelopOneIndustry,
@@ -1052,16 +1080,25 @@ class Display:
             }
 
         elif action == "LOAN":
+            if not self.active_player.canLoan():
+                print("Cant loan")
+                return
             self.game_state = GameState.CARD_CHOICE
             self.current_action = {
                 "type": ActionTypes.Loan,
             }
         elif action == "SCOUT":
+            if not self.active_player.canScout():
+                print("Cant scout")
+                return
             self.game_state = GameState.CARD_CHOICE
             self.current_action = {
                 "type": ActionTypes.Scout,
             }
         elif action == "PASS":
+            if len(self.active_player.hand.cards) == 0:
+                print("Cant pass")
+                return
             self.current_action = {
                 "type": ActionTypes.Pass,
             }
@@ -1071,7 +1108,8 @@ class Display:
         if not self.current_action:
             return
 
-        self.game.next_action(self.current_action)
+        action_log = self.game.next_action(self.current_action)
+        self.update_game_log(action_log)
         self.reset_action()
 
     # def construct_outer_board_polygon(self):
@@ -1105,6 +1143,11 @@ class Display:
         self.game_log_sftext.post_update()
         pygame.event.pump()
 
+    def render_game_log(self):
+        self.game_log_surface.fill((57, 98, 137))
+        self.game_log_sftext.on_update()
+        self.screen.blit(self.game_log_surface, self.game_log_target_rect)
+
     def render_board(self, mouse_click=False, mouse_pos=(0, 0)):
         self.screen.blit(self.img, (0, 0))
         self.drawCoal()
@@ -1120,6 +1163,7 @@ class Display:
         self.drawHand(mouse_click=mouse_click, mouse_pos=mouse_pos)
         self.drawActionMenu(mouse_click=mouse_click, mouse_pos=mouse_pos)
         self.draw_player_industry_mat(mouse_click=mouse_click, mouse_pos=mouse_pos)
+        self.render_game_log()
         pygame.display.update()
 
     def run_event_loop(self, test=False):
@@ -1139,22 +1183,35 @@ class Display:
         # turn = self.game.turn
 
         # next_action = False
+
+        tracemalloc.start()
+
+        snapshot1 = tracemalloc.take_snapshot()
+        frames = 0
         while run:
             pygame.time.delay(150)
-            Tk().wm_withdraw()  # Hide the main tkinter window
+            # Tk().wm_withdraw()  # Hide the main tkinter window
 
             # Reset mouse_click at the beginning of each loop iteration
             mouse_click = False
 
             for event in pygame.event.get():
                 if event.type == pygame.QUIT:
-                    run = False
+                    pygame.quit()
+                    sys.exit()
                 elif event.type == pygame.MOUSEBUTTONUP:
                     self.mouse_click = mouse_click = True
                     self.mouse_pos = mouse_pos = (
                         pygame.mouse.get_pos()
                     )  # Update mouse_pos on click
                     print(f"Mouse click at {mouse_pos}")
+                elif event.type == pygame.MOUSEBUTTONDOWN:
+                    if event.button <= 3:
+                        pass
+                    else:
+                        mouse_pos = pygame.mouse.get_pos()
+                        if self.game_log_target_rect.collidepoint(*mouse_pos):
+                            self.game_log_sftext.on_mouse_scroll(event)
 
             self.screen.fill(self.BACKGROUND_COLOUR)
             # Pass mouse_click and mouse_pos to render_board
@@ -1203,6 +1260,9 @@ class Display:
                             self.current_action["buildLocation"].town
                         )
                     )
+
+                    print("Available coal buildings", availableCoalBuildings)
+                    print("Connected to market", connectedToMarket)
 
                     coalNeeded = self.current_action["building"].coalCost
 
@@ -1288,10 +1348,10 @@ class Display:
                     print(
                         "No iron buildings available. Paying price and applying action"
                     )
-                    self.apply_action()
+                    self.game_state = GameState.END_ACTION
                 elif len(ironBuildings) == 1:
                     self.current_action["ironSources"].append(ironBuildings[0])
-                    self.apply_action()
+                    self.game_state = GameState.END_ACTION
                 else:
                     for ironBuilding in ironBuildings:
                         x, y = self.buildLocationCoords[ironBuilding.buildLocation.id]
@@ -1306,7 +1366,7 @@ class Display:
                             self.current_action["ironSources"].append(ironBuilding)
                             ironCost -= ironBuilding.resourceAmount
                             if totalIron <= 0:
-                                self.apply_action()
+                                self.game_state = GameState.END_ACTION
                                 break
 
             elif "card" in self.current_action and (
@@ -1323,6 +1383,7 @@ class Display:
                     self.active_player.industryMat[key][-1]
                     for key in self.active_player.industryMat.keys()
                     if len(self.active_player.industryMat[key]) > 0
+                    and self.active_player.industryMat[key][-1].canBeDeveloped
                 ]:
                     x, y = INDUSTRY_MAT_POSITIONS[building.name][str(building.tier)]
 
@@ -1334,7 +1395,11 @@ class Display:
                     ):
                         if self.game_state == GameState.DEVELOP1_CHOICE:
                             self.current_action["industry1"] = building
-                            self.game_state = GameState.DEVELOP2_CHOICE
+
+                            if self.active_player.canAffordSecondDevelop():
+                                self.game_state = GameState.DEVELOP2_CHOICE
+                            else:
+                                self.game_state = GameState.END_ACTION
                         else:
                             self.current_action["type"] = (
                                 ActionTypes.DevelopTwoIndustries
@@ -1425,6 +1490,7 @@ class Display:
                     self.active_player.industryMat[key][-1]
                     for key in self.active_player.industryMat.keys()
                     if len(self.active_player.industryMat[key]) > 0
+                    and self.active_player.industryMat[key][-1].canBeDeveloped
                 ]:
                     x, y = INDUSTRY_MAT_POSITIONS[building.name][str(building.tier)]
 
@@ -1457,11 +1523,79 @@ class Display:
 
                 if self.current_action["type"] == ActionTypes.DevelopOneIndustry:
                     self.game_state = GameState.DEVELOP1_CHOICE
+                elif self.current_action["type"] == ActionTypes.PlaceCanal:
+                    self.game_state = GameState.ROAD_CHOICE
+                elif (
+                    self.current_action["type"] == ActionTypes.PlaceRailRoad
+                    and "road2" not in self.current_action
+                ):
+                    self.game_state = GameState.COAL_CHOICE
                 else:
                     print(f"Should apply action now")
                     print(f"{self.current_action}")
-                    self.apply_action()
+                    self.game_state = GameState.END_ACTION
+            elif (
+                self.game_state == GameState.COAL_CHOICE
+                and "type" in self.current_action
+                and (
+                    self.current_action["type"] == ActionTypes.PlaceRailRoad
+                    or self.current_action["type"] == ActionTypes.PlaceSecondRoad
+                )
+            ):
+
+                if self.current_action["building"].coalCost == 0:
+
+                    self.game_state = GameState.IRON_CHOICE
+                else:
+                    availableCoalBuildings, connectedToMarket = (
+                        self.game.board.getAvailableCoalForTown(
+                            self.current_action["buildLocation"].town
+                        )
+                    )
+
+                    print("Available coal buildings", availableCoalBuildings)
+                    print("Connected to market", connectedToMarket)
+
+                    coalNeeded = self.current_action["building"].coalCost
+
+                    if not self.availableBuildLocations and not connectedToMarket:
+                        raise RuntimeError("No coal available for building")
+
+                    # Coal cost can be 1 or 2 so we need to select connected coal industry or coal market
+                    for building in availableCoalBuildings:
+                        x, y = self.buildLocationCoords[building.buildLocation.id]
+                        building_selection_rect = pygame.Rect(x - 25, y - 25, 50, 50)
+                        pygame.draw.rect(
+                            self.screen, GREEN, building_selection_rect, 3, 1
+                        )
+                        if mouse_click and building_selection_rect.collidepoint(
+                            mouse_pos[0], mouse_pos[1]
+                        ):
+                            self.current_action["coalSources"].append(building)
+                            coalNeeded -= building.resourceAmount
+                            if coalNeeded <= 0:
+                                self.game_state = GameState.IRON_CHOICE
+                                break
+                    if connectedToMarket and coalNeeded > 0:
+                        x, y = 989, 375
+                        coal_market_rect = pygame.Rect(x - 24, y - 20, 102, 350)
+                        pygame.draw.rect(self.screen, GREEN, coal_market_rect, 3, 1)
+                        if mouse_click and coal_market_rect.collidepoint(
+                            mouse_pos[0], mouse_pos[1]
+                        ):
+                            self.current_action["coalSources"].append(connectedToMarket)
+                            self.game_state = GameState.IRON_CHOICE
 
             pygame.display.update()
             self.game_log_sftext.post_update()
             pygame.event.pump()
+
+            if frames % 100 == 0:
+                snapshot2 = tracemalloc.take_snapshot()
+                top_stats = snapshot2.compare_to(snapshot1, "lineno")
+                log = f"Frame {frames} -- ------[ Top 10 differences ]\n"
+                for stat in top_stats[:10]:
+                    log += f"{stat}\n"
+                with open("memory.log", "a") as f:
+                    f.write(log)
+            frames += 1

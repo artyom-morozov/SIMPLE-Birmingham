@@ -55,7 +55,7 @@ class LocationCard(Card):
 
     def __str__(self) -> str:
         if self.isWild:
-            return self.name
+            return self.name.value
 
         if self.name in [STOKE_ON_TRENT, LEEK, STONE, UTTOXETER]:
             return prCyan(self.name)

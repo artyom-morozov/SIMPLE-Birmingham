@@ -33,6 +33,8 @@ class BuildLocation:
 
     def addTown(self, town: Town):
         self.town = town
+        for possibleBuildingName in self.possibleBuilds:
+            town.slot_to_bl[possibleBuildingName].append(self)
 
     def addBuilding(self, building: Building):
         self.building = building
@@ -50,7 +52,9 @@ class BuildLocation:
 
     def isPossibleBuild(self, building: Building):
         #     there's (no building or overbuilding)                        and is actually buildable there
-        return (not self.building or self.building.tier < building.tier) and building.name in self.possibleBuilds
+        return (
+            not self.building or self.building.tier < building.tier
+        ) and building.name in self.possibleBuilds
 
     def __str__(self) -> str:
         returnStr = "BuildingTile:|"

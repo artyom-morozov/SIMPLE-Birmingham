@@ -28,6 +28,7 @@ class GameState(Enum):
     MERCHANT_CHOICE = 18
     TAKE_BEER_MERCHANT_CHOICE = 19
     FREE_DEVELOP_CHOICE = 20
+    END_ACTION = 21
 
 
 class PlayerId(IntEnum):

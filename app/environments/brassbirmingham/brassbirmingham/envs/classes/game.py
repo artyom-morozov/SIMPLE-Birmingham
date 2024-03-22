@@ -1,8 +1,10 @@
+from typing import List, Tuple
 import numpy as np
 import random
 import copy
 from collections import defaultdict, deque
 
+from classes.buildings.industry_building import IndustryBuilding
 from classes.enums import ActionTypes, Era, PlayerId
 from classes.player import Player
 
@@ -94,14 +96,20 @@ class Game:
 
     def do_action(self, action):
         player: Player = self.get_active_player()
+
+        action_number = len(self.action_history[(self.turn, player.id)]) + 1
+        message = {"player_id": player.id, "text": f"Action {action_number}: "}
+
         if "type" not in action:
             raise ValueError("Action must have a type")
 
         print(f"Doing action {action} for player {player.id}")
         if action["type"] == ActionTypes.Loan and "card" in action:
             player.loan(action["card"])
+            message["text"] += f"{player.name} took a loan"
         elif action["type"] == ActionTypes.Pass and "card" in action:
             player.passTurn(action["card"])
+            message["text"] += f"{player.name} passed"
         elif (
             action["type"] == ActionTypes.Scout
             and "card1" in action
@@ -109,6 +117,7 @@ class Game:
             and "card3" in action
         ):
             player.scout(action["card1"], action["card2"], action["card3"])
+            message["text"] += f"{player.name} scouted"
         elif (
             action["type"] == ActionTypes.Sell
             and "card" in action
@@ -116,12 +125,33 @@ class Game:
             and "freeDevelop" in action
         ):
             player.sell(action["card"], action["forSale"], action["freeDevelop"])
+            message["text"] += f"{player.name} sold the following:\n"
+
+            for building, beerSources, _ in action["forSale"]:
+                soldMeessage = (
+                    f"   {building.name.value.capitalize()} in {building.town.name}"
+                )
+                if len(beerSources) > 0:
+                    soldMeessage += " with beer from:\n"
+                    for beerSource in beerSources:
+                        soldMeessage += "       "
+                        soldMeessage += (
+                            f"Brewery in {beerSource.town.name}"
+                            if isinstance(beerSource, IndustryBuilding)
+                            else f"Merchant in {beerSource.tradePost.name}"
+                        )
+                        soldMeessage += "\n"
+                message["text"] += soldMeessage
+
         elif (
             action["type"] == ActionTypes.PlaceRailRoad
             and "card" in action
             and "road1" in action
         ):
             player.buildOneRailroad(action["road1"], action["card"])
+            message[
+                "text"
+            ] += f"{player.name} built railroad: {action['road1'].towns[0].name} -- {action['road1'].towns[1].name}"
         elif (
             action["type"] == ActionTypes.PlaceSecondRoad
             and "card" in action
@@ -129,6 +159,10 @@ class Game:
             and "road2" in action
         ):
             player.buildTwoRailroads(action["road1"], action["road2"], action["card"])
+            message["text"] += f"{player.name} built 2 railroads:\n "
+
+            for road in (action["road1"], action["road2"]):
+                message["text"] += f"   {road.towns[0].name} -- {road.towns[1].name}\n"
         elif (
             action["type"] == ActionTypes.BuildIndustry
             and "building" in action
@@ -144,6 +178,9 @@ class Game:
                 action["coalSources"],
                 action["ironSources"],
             )
+            message[
+                "text"
+            ] += f"{player.name} built {action['building'].name.value} ({action['building'].getTier()}) in {action['buildLocation'].town.name}"
         elif (
             action["type"] == ActionTypes.PlaceCanal
             and "road" in action
@@ -153,17 +190,26 @@ class Game:
                 roadLocation=action["road"],
                 discard=action["card"],
             )
+            message[
+                "text"
+            ] += f"{player.name} built canal: {action['road'].towns[0].name} -- {action['road'].towns[1].name}"
         elif (
             action["type"] == ActionTypes.DevelopOneIndustry
             and "card" in action
             and "industry1" in action
             and "ironSources" in action
         ):
+            initialTier = action["industry1"].getTier()
             player.developOneIndustry(
                 action["industry1"],
                 action["card"],
                 action["ironSources"],
             )
+
+            message[
+                "text"
+            ] += f'{player.name} developed {action["industry1"].name.value}: {initialTier} --> {action["industry1"].getTier()}'
+
         elif (
             action["type"] == ActionTypes.DevelopTwoIndustries
             and "card" in action
@@ -171,20 +217,32 @@ class Game:
             and "industry2" in action
             and "ironSources" in action
         ):
+            initialTiers = (
+                action["industry1"].getTier(),
+                action["industry2"].getTier(),
+            )
             player.developTwoIndustries(
                 action["industry1"],
                 action["industry2"],
                 action["card"],
                 action["ironSources"],
             )
+            message["text"] += f"{player.name} developed 2 industries:\n"
+
+            for i, industry in enumerate([action["industry1"], action["industry2"]]):
+                f"  {industry.name.value}: {initialTiers[i]} --> {industry.getTier()}\n"
+
         else:
             raise ValueError(f"Invalid action {action} for player {player.id}")
+        return message
 
     def next_action(self, action):
         # if self.interactive:
         #     self.display.render()
+
         player = self.get_active_player()
-        self.do_action(action)
+
+        action_log = self.do_action(action)
 
         self.save_action(player.id, action)
 
@@ -196,8 +254,7 @@ class Game:
             if self.players_go_index == self.num_players:
                 self.players_go_index = 0
                 self.start_new_turn()
-            return False
-        return True
+        return action_log
 
     def start_new_turn(self):
         # check if end game/ era change

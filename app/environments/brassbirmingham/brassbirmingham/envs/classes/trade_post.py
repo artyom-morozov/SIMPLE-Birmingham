@@ -20,7 +20,7 @@ class Merchant:
         self.type = "TradePost Merchant"
         self.name = name
         self.hasBeer = True if self.name != MerchantName.blank else False
-        self.tradePost = None
+        self.tradePost: TradePost = None
 
     def canSellHere(self, buildingName: BuildingName):
         answer = self.name.value == buildingName.value or self.name == MerchantName.all

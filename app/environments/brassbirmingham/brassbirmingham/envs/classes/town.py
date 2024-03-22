@@ -1,11 +1,12 @@
 from __future__ import annotations
 
+from collections import defaultdict
 from typing import TYPE_CHECKING, List
 
+from classes.buildings.enums import BuildingName
 import consts
 from python.id import id
-from python.print_colors import (prCyan, prGreen, prLightGray, prPurple, prRed,
-                                 prYellow)
+from python.print_colors import prCyan, prGreen, prLightGray, prPurple, prRed, prYellow
 
 if TYPE_CHECKING:
     from .board import Board
@@ -27,7 +28,11 @@ class Town:
         self.type = "Town"
         self.color = color
         self.name = name
+
+        self.slot_to_bl = defaultdict(list)
+
         self.buildLocations = buildLocations
+
         for buildLocation in self.buildLocations:
             buildLocation.addTown(self)
         # networks to other towns ex: Town('Leek') would have [Town('Stoke-On-Trent'), Town('Belper')]
@@ -53,14 +58,31 @@ class Town:
     def addRoadLocation(self, roadLocation: RoadLocation):
         roadLocation.addTown(self)
         self.networks.append(roadLocation)
-    
+
     # get Available canals to build
-    def getAvailableCanals(self)  -> List[RoadLocation]:
-        return [rLocation for rLocation in self.networks if rLocation.isBuilt == False and rLocation.canBuildCanal == True ]
-        
+    def getAvailableCanals(self) -> List[RoadLocation]:
+        return [
+            rLocation
+            for rLocation in self.networks
+            if rLocation.isBuilt == False and rLocation.canBuildCanal == True
+        ]
+
+    def getBuildLocation(
+        self, buildingName: BuildingName, index: int = 0
+    ) -> BuildLocation:
+        if buildingName not in self.slot_to_bl or index >= len(
+            self.slot_to_bl[buildingName]
+        ):
+            raise ValueError(f"{buildingName} is not a valid building name")
+        return self.slot_to_bl[buildingName][index]
+
     # get Available railroads to build
-    def getAvailableRailroads(self)  -> List[RoadLocation]:
-        return [rLocation for rLocation in self.networks if rLocation.isBuilt == False and rLocation.canBuildRailroad == True ]
+    def getAvailableRailroads(self) -> List[RoadLocation]:
+        return [
+            rLocation
+            for rLocation in self.networks
+            if rLocation.isBuilt == False and rLocation.canBuildRailroad == True
+        ]
 
     def getNetworkVictoryPoints(self):
         networkVP = 0

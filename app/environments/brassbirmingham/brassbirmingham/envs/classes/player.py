@@ -1,6 +1,7 @@
 from __future__ import annotations
 from collections import defaultdict, deque
 
+import itertools
 from typing import TYPE_CHECKING, List, Set, Tuple
 
 from .buildings.industry_building import IndustryBuilding
@@ -111,7 +112,6 @@ class Player:
     """
 
     def pay(self, amount: int):
-        print("Paying", amount, " current money is ", self.money)
         self.money -= amount
         assert self.money >= 0
         self.spentThisTurn += amount
@@ -572,22 +572,19 @@ class Player:
         return self.income >= 3
 
     # 6 SCOUT
-    def canScout(self, additionalDiscard: Card) -> bool:
+    def canScout(self) -> bool:
         if (
             len(self.board.wildIndustryCards) < 1
-            and len(self.board.wildlocationCards) < 1
+            or len(self.board.wildlocationCards) < 1
+            or len(self.hand.cards) < 3
         ):
             return False
 
-        ownership = False
         for card in self.hand.cards:
             if card.isWild:
-                # No scouting if player has at least 1 wild card already
                 return False
-            if card.id == additionalDiscard.id:
-                ownership = True
 
-        return ownership
+        return True
 
     # 7 PASS
     def canPassTurn(self) -> bool:
@@ -599,7 +596,7 @@ class Player:
         self, building: MarketBuilding, test=False
     ) -> Tuple[Set[Merchant], Set[IndustryBuilding | Merchant], int]:
 
-        print("Getting available beer sources for", building)
+        # print("Getting available beer sources for", building)
 
         # Breweries with available beer that can be used
         beers: Set[IndustryBuilding | Merchant] = set()
@@ -627,8 +624,6 @@ class Player:
 
         while q:
             town: TradePost | Town = q.popleft()
-
-            print("Checking town", town.name, "for beer sources")
 
             # Verify if tradepost has beer
             if isinstance(town, TradePost):
@@ -662,6 +657,19 @@ class Player:
                             v.add(_town.id)
 
         return merchants, beers, beerFromBreweries + beerFromTradePosts
+
+    def getAvailableRailroads(self, second: bool = False) -> Set[RoadLocation]:
+        assert self.board.era == Era.railroad
+        potentialRailRoads: Set[RoadLocation] = set()
+        potenitalRoads: Set[RoadLocation] = self.getAvailableNetworks()
+
+        for roadLocation in potenitalRoads:
+            for town in roadLocation.towns:
+                self.board.getAvailableCoalForTown(town)
+                if (
+                    len() >= 1
+                ):
+                    potentialRailRoads.add(roadLocation)
 
     # Get a list off all available road locations where a road could be build
     def getAvailableNetworks(self) -> Set[RoadLocation]:
@@ -706,6 +714,7 @@ class Player:
                 # print('Exploring town', t)
                 if t in self.currentTowns:
                     continue
+
                 availableBuildingRoads: List[RoadLocation] = (
                     t.getAvailableRailroads() if isRailEra else t.getAvailableCanals()
                 )
@@ -735,7 +744,7 @@ class Player:
             for t in towns:
                 if isinstance(t, Town):
                     for bl in t.buildLocations:
-                        if self.canBuildBuilding(b, bl):
+                        if self.canUseCardForBuilding(b, bl, card):
                             buildLocations.add(bl)
                             builds.add((b, bl))
 
@@ -788,14 +797,16 @@ class Player:
 
         for b in firstBuildings:
             for bl in availableBuildLocations:
-                if self.canBuildBuilding(b, bl):
+                if self.canUseCardForBuilding(b, bl, card):
                     # print('Building ', b)
                     # print('BuildLocation', bl)
                     builds.add((b, bl))
 
         return builds, firstBuildings, availableBuildLocations
 
-    def getAvailableBuilds(self):
+    def getAvailableBuilds(
+        self,
+    ) -> Tuple[Set[Tuple[Building, BuildLocation]], Set[Building], Set[BuildLocation]]:
         builds = set()
         firstBuildings = set()
         buildLocations = set()
@@ -827,17 +838,35 @@ class Player:
     def isCardInHand(self, card: Card):
         return card.id in [_card.id for _card in self.hand.cards]
 
+    def isInNetwork(self, buildLocation: BuildLocation):
+        if buildLocation.building and buildLocation.building.owner == self:
+            return True
+
+        if self.board.era == Era.railroad and buildLocation.town in self.currentTowns:
+            return True
+
+        for roadLocation in self.currentNetworks:
+            if buildLocation.town in roadLocation.towns:
+                return True
+        return False
+
     def canUseCardForBuilding(
         self, building: Building, buildLocation: BuildLocation, card: Card
     ):
+        canUse = card.name == buildLocation.town.name or card.isWild
         if isinstance(card, IndustryCard):
             builds = set(card.getBuildNames())
 
-            return (
-                building.name in builds
+            canUse = (
+                (
+                    (len(self.currentBuildings) == 0 and len(self.currentNetworks) == 0)
+                    or self.isInNetwork(buildLocation)
+                )
+                and building.name in builds
                 and len(set(buildLocation.possibleBuilds).intersection(builds)) > 0
             )
-        return card.name == buildLocation.town.name
+
+        return canUse and self.canBuildBuilding(building, buildLocation)
 
     # Get A list of buildings that could be sold if you have a beer source
     #
@@ -846,13 +875,13 @@ class Player:
     def getAvailableBuildingsForSale(self):
         marketBuildings = set()
 
-        print("Getting available buildings for sale")
-        print("Current buildings", self.currentBuildings)
+        # print("Getting available buildings for sale")
+        # print("Current buildings", self.currentBuildings)
         for building in self.currentBuildings:
-            print(
-                "Checking building",
-                building,
-            )
+            # print(
+            # "Checking building",
+            # building,
+            # )
             if (
                 building.isFlipped
                 or not building.isActive
@@ -881,7 +910,6 @@ class Player:
         building: Building = self.industryMat[industryName][-1]
 
         assert self.isCardInHand(card)
-        assert self.canBuildBuilding(building, buildLocation)
         assert self.canUseCardForBuilding(building, buildLocation, card)
 
         coalCost = 0
@@ -891,25 +919,13 @@ class Player:
         elif len(coalSources) > 1:
             assert building.coalCost == len(coalSources)
 
-        if isinstance(card, LocationCard):
-            assert card.name == buildLocation.town.name
-            if card.isWild:
+        if card.isWild:
+            if isinstance(card, LocationCard):
                 self.board.wildlocationCards.append(card)
-                self.hand.cards = list(
-                    filter(lambda x: x.id != card.id, self.hand.cards)
-                )
-            else:
-                self.hand.spendCard(card)
 
-        if isinstance(card, IndustryCard):
-            assert building.name in card.getBuildNames()
-            if card.isWild:
+            if isinstance(card, IndustryCard):
                 self.board.wildIndustryCards.append(card)
-                self.hand.cards = list(
-                    filter(lambda x: x.id != card.id, self.hand.cards)
-                )
-            else:
-                self.hand.spendCard(card)
+
         # if overbuilding
         if buildLocation.building:
             buildLocation.building.isActive = False
@@ -947,15 +963,16 @@ class Player:
                 for ironSource in ironSources:
                     ironSource.decreaseResourceAmount(1)
         self.pay(building.cost + ironCost + coalCost)
-        print(
-            "Adding building",
-            building,
-            " to curreent buildings. Current buildings now",
-            self.currentBuildings,
-        )
+        # print(
+        #     "Adding building",
+        #     building,
+        #     " to curreent buildings. Current buildings now",
+        #     self.currentBuildings,
+        # )
         self.currentBuildings.add(building)
         self.industryMat[industryName].pop(-1)
         self.currentTowns.add(building.town)
+        self.hand.spendCard(card)
 
     # 2 NETWORK
     def buildCanal(self, roadLocation: RoadLocation, discard: Card):
@@ -1008,13 +1025,35 @@ class Player:
             ironBuilding.decreaseResourceAmount(ironNeeded)
         else:
             ironCost = self.board.priceForIron(ironNeeded)
-            assert self.money >= ironCost
             self.pay(ironCost)
             self.board.ironMarketRemaining = max(
                 self.board.ironMarketRemaining - ironNeeded, 0
             )
         building.isRetired = True
         self.industryMat[building.name].pop(-1)
+        self.hand.spendCard(discard)
+
+    def canAffordOneDevelop(self):
+        freeIron = sum(
+            [ironB.resourceAmount for ironB in self.board.getIronBuildings()]
+        )
+
+        if freeIron >= 1:
+            return True
+        else:
+            ironCost = self.board.priceForIron(1)
+            return self.money >= ironCost
+
+    def canAffordSecondDevelop(self):
+        freeIron = sum(
+            [ironB.resourceAmount for ironB in self.board.getIronBuildings()]
+        )
+        if freeIron >= 2:
+            return True
+        else:
+            ironNeeded = 2 - freeIron
+            ironCost = self.board.priceForIron(ironNeeded)
+            return self.money >= ironCost
 
     def developTwoIndustries(
         self,
@@ -1030,6 +1069,13 @@ class Player:
 
         ironNeeded = 2
 
+        if len(ironSources) == 0:
+            ironCost = self.board.priceForIron(ironNeeded)
+            self.pay(ironCost)
+            self.board.ironMarketRemaining = max(
+                self.board.ironMarketRemaining - ironNeeded, 0
+            )
+
         if len(ironSources) == 1:
             ironBuilding = ironSources.pop()
             assert (
@@ -1044,14 +1090,6 @@ class Player:
             assert ironBuilding.resourceAmount >= 1
             ironBuilding.decreaseResourceAmount(ironNeeded)
             ironNeeded -= 1
-
-        if len(ironSources) == 0:
-            ironCost = self.board.priceForIron(ironNeeded)
-            assert self.money >= ironCost
-            self.pay(ironCost)
-            self.board.ironMarketRemaining = max(
-                self.board.ironMarketRemaining - ironNeeded, 0
-            )
 
         if len(ironSources) == 2:
             for ironBuilding in ironSources:
@@ -1071,6 +1109,7 @@ class Player:
         building2.isRetired = True
         self.industryMat[building1.name].pop(-1)
         self.industryMat[building2.name].pop(-1)
+        self.hand.spendCard(discard)
 
     # 3 DEVELOP
     def freeDevelop(self, building1: Building, building2: Building = None):
@@ -1131,7 +1170,7 @@ class Player:
         assert self.isCardInHand(additionalDiscard)
         assert self.isCardInHand(card1)
         assert self.isCardInHand(card2)
-        assert self.canScout(additionalDiscard)
+        assert self.canScout()
         self.hand.add(self.board.wildlocationCards.pop(0))
         self.hand.add(self.board.wildIndustryCards.pop(0))
         self.hand.spendCard(additionalDiscard)

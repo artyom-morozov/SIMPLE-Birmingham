@@ -9,6 +9,25 @@ if TYPE_CHECKING:
 from .enums import BuildingName, BuildingType, MerchantName
 
 
+def printRoman(num):
+    # Storing roman values of digits from 0-9
+    # when placed at different places
+    m = ["", "M", "MM", "MMM"]
+    c = ["", "C", "CC", "CCC", "CD", "D", "DC", "DCC", "DCCC", "CM "]
+    x = ["", "X", "XX", "XXX", "XL", "L", "LX", "LXX", "LXXX", "XC"]
+    i = ["", "I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX"]
+
+    # Converting to roman
+    thousands = m[num // 1000]
+    hundreds = c[(num % 1000) // 100]
+    tens = x[(num % 100) // 10]
+    ones = i[num % 10]
+
+    ans = thousands + hundreds + tens + ones
+
+    return ans
+
+
 class Building:
     """
     Building object
@@ -59,9 +78,7 @@ class Building:
         self.town = None
         self.isSold = False  # is sold/ran out of resources
         self.isActive = False  # is on the board i.e., not bought yet
-        self.isRetired = (
-            False  # only used for retired buildings (tier 1's) in second phase (pieces 'put back in the box')
-        )
+        self.isRetired = False  # only used for retired buildings (tier 1's) in second phase (pieces 'put back in the box')
         self.isFlipped = False
 
     """
@@ -93,13 +110,20 @@ class Building:
 
     # Is beer building
     def isBeerBuilding(self) -> bool:
-        isBeer =  self.type == BuildingType.industry and self.name == BuildingName.beer
-        hasBeer = self.isActive and not self.isFlipped and not self.isRetired and self.resourceAmount > 0
+        isBeer = self.type == BuildingType.industry and self.name == BuildingName.beer
+        hasBeer = (
+            self.isActive
+            and not self.isFlipped
+            and not self.isRetired
+            and self.resourceAmount > 0
+        )
         return isBeer and hasBeer
+
+    def getTier(self):
+        return printRoman(self.tier)
 
     def __repr__(self) -> str:
         if self.isActive and self.town:
             return f"\nLevel {self.tier} {self.name.value} in {self.town} :: Owner: {self.owner}"
 
-        return f"\nBuilding {self.tier}:{self.name}:: Owner: {self.owner}, Bought: {self.isActive}, Sold: {self.isSold} Retired: {self.isRetired}"
-    
+        return f"\nBuilding Level {self.getTier()}:{self.name.value}:: Owner: {self.owner}, Bought: {self.isActive}, Sold: {self.isSold} Retired: {self.isRetired}\n"

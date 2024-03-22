@@ -7,6 +7,7 @@ from classes.deck import Deck
 from classes.enums import Era
 from classes.player import Player
 from classes.buildings.enums import MerchantName
+from classes.trade_post import Merchant
 from consts import *
 from render import render
 from functools import reduce
@@ -35,8 +36,8 @@ class Test(unittest.TestCase):
     def testSelling(self):
         self.resetGame(2)
 
-        print("Player 1", self.p1, " color - ", self.p1.color)
-        print("Player 2", self.p2, " color - ", self.p2.color)
+        # print("Player 1", self.p1, " color - ", self.p1.color)
+        # print("Player 2", self.p2, " color - ", self.p2.color)
 
         birmCard1 = LocationCard(name=BIRMINGHAM)
         birmCard2 = LocationCard(name=WALSALL)
@@ -357,20 +358,73 @@ class Test(unittest.TestCase):
     # print('Unique victory points are ', uniqueVPS, len(uniqueVPS))
     # print('Unique building costs  are ', uniqueCosts, len(uniqueCosts))
 
-    def testAvailableIndustryCardBuilds(self):
-        print(
-            "TESTS1-----------------------------------------------------------------------------"
+    def testCards(self):
+        self.resetGame(2)
+
+        self.p1.hand.cards = [
+            IndustryCard(name=CardName.man_goods_or_cotton),
+            IndustryCard(name=CardName.coal_mine),
+        ]
+
+        self.p2.hand.cards = [IndustryCard(name=CardName.coal_mine)]
+
+        birm: Town = self.board.townDict[BIRMINGHAM]
+
+        # Get buildlocation id
+        # print('Coalbrookdale builds')
+        # for i, bl in enumerate(coalbrookdale.buildLocations):
+        #     print(i, ' can build', bl.possibleBuilds)
+
+        # BUILD COTTON
+        self.p1.buildBuilding(
+            industryName=BuildingName.cotton,
+            buildLocation=birm.buildLocations[0],
+            card=self.p1.hand.cards[0],
         )
+
+        b_to_ox = birm.networks[4]
+
+        self.p2.buildCanal(b_to_ox, self.p2.hand.cards[0])
+
+        print("Available builds after building cotton")
+
+        availableBuilds = self.p1.getAvailableBuilds()[0]
+
+        print("Builds after building coal")
+        for b, bl in availableBuilds:
+
+            print(b.name, f"({b.tier}) in ", bl.town.name)
+            print(f"BID({b.id}) BL_ID({bl.id})")
+
+        self.assertEqual(
+            availableBuilds, set(), "Should not have coal as potential build"
+        )
+
+        coventry: Town = self.board.townDict[COVENTRY]
+
+        self.assertFalse(
+            self.p1.canUseCardForBuilding(
+                building=self.p1.industryMat[BuildingName.coal][-1],
+                buildLocation=coventry.getBuildLocation(BuildingName.coal, 0),
+                card=self.p1.hand.cards[0],
+            ),
+            "Should not be able to use coal card for building",
+        )
+
+    def testAvailableIndustryCardBuilds(self):
+        # print(
+        #     "TESTS1-----------------------------------------------------------------------------"
+        # )
         self.resetGame(2)
 
         ironCard = IndustryCard(name=CardName.iron_works)
         self.p1.hand.cards = [ironCard]
 
         builds, firstBuildings, buildLocations = self.p1.getAvailableBuilds()
-        print("Failing test")
-        for b, bl in builds:
-            print(b.name, " in ", bl.town.name)
-            print(f"BID({b.id}) BL_ID({bl.id})")
+        # print("Failing test")
+        # for b, bl in builds:
+        #     print(b.name, " in ", bl.town.name)
+        #     print(f"BID({b.id}) BL_ID({bl.id})")
         self.assertEqual(builds, set(), "Should not have iron as potential build")
 
         self.resetGame(2)
@@ -468,28 +522,29 @@ class Test(unittest.TestCase):
         # Add card for developing and develop
         garbageCard2 = LocationCard(CANNOCK)
         self.p2.hand.cards.append(garbageCard2)
-        # print('Cards in hand', self.p2.hand.cards)
+        # print("Cards in hand", self.p2.hand.cards)
 
-        self.p2.develop(
+        p2_beer_3 = self.p2.industryMat[BuildingName.beer][-3]
+        self.p2.developTwoIndustries(
             self.p2.industryMat[BuildingName.beer][-1],
             self.p2.industryMat[BuildingName.beer][-2],
             discard=garbageCard2,
         )
 
         # print('Last beer',  self.p2.industryMat[BuildingName.beer][-1])
-        # print('Available Builds after development:')
+        # print("Available Builds after development:")
         # for b, bl in self.p2.getAvailableBuilds()[0]:
-        #     print(b.name, ' in ',bl.town.name)
+        #     print(b.name, " in ", bl.town.name)
 
-        self.assertEqual(
-            len(self.p2.getAvailableBuilds()[0]),
-            1,
-            "Shoould have overbuilding availablee after deveelopment",
+        self.assertIn(
+            p2_beer_3,
+            self.p2.getAvailableBuilds()[1],
+            "Shoould have beer overbuilding available after development",
         )
 
-        print(
-            "TESTS2-----------------------------------------------------------------------------"
-        )
+        # print(
+        #     "TESTS2-----------------------------------------------------------------------------"
+        # )
         self.p1.hand.cards = [LocationCard(name=COALBROOKDALE)]
         self.p1.buildCanal(coalbrookdale.networks[0], self.p1.hand.cards[0])
 
@@ -499,59 +554,15 @@ class Test(unittest.TestCase):
         ]
 
         # render(self.board)
-        print("Available builds after canal")
-        for b, bl in self.p2.getAvailableBuilds()[0]:
-            print(b.name, " in ", bl.town.name)
+        # # print("Available builds after canal")
+        # for b, bl in self.p2.getAvailableBuilds()[0]:
+        #     print(b.name, " in ", bl.town.name)
 
         self.assertEqual(
             len(self.p2.getAvailableBuilds()[0]),
             0,
             "Shoould not have available builds with oponents road",
         )
-
-    def testCards(self):
-        self.resetGame(2)
-
-        dale1, dale2 = LocationCard(name=COALBROOKDALE), LocationCard(
-            name=COALBROOKDALE
-        )
-
-        self.p1.hand.cards = [dale1, dale2]
-
-        coalbrookdale: Town = self.board.townDict[COALBROOKDALE]
-
-        # Get buildlocation id
-        # print('Coalbrookdale builds')
-        # for i, bl in enumerate(coalbrookdale.buildLocations):
-        #     print(i, ' can build', bl.possibleBuilds)
-
-        self.p1.buildBuilding(
-            industryName=BuildingName.coal,
-            buildLocation=coalbrookdale.buildLocations[2],
-            card=dale1,
-        )
-
-        availableBuilds = self.p1.getAvailableBuilds()[0]
-
-        self.assertEqual(
-            set(
-                [
-                    (
-                        self.p1.industryMat[BuildingName.coal][-1],
-                        coalbrookdale.buildLocations[2],
-                    )
-                ]
-            ),
-            availableBuilds,
-            "Should just have 1 build after spending location card",
-        )
-        self.assertEqual(self.p1.hand.cards, [dale2], "Should spend the card used")
-
-        # print('Builds after building coal')
-        # for b, bl in availableBuilds:
-
-        #     print(b.name, f'({b.tier}) in ',bl.town.name)
-        #     print(f'BID({b.id}) BL_ID({bl.id})')
 
     def testAvailableLocationCardBuilds(self):
 
@@ -567,10 +578,10 @@ class Test(unittest.TestCase):
         allAvailableTowns = set([bl.town for _, bl in self.p1.getAvailableBuilds()[0]])
         allGameTowns = set(self.board.towns)
 
-        print(
-            "Towns UNAvailable for building after Wild Location Card",
-            allGameTowns.difference(allAvailableTowns),
-        )
+        # print(
+        #     "Towns UNAvailable for building after Wild Location Card",
+        #     allGameTowns.difference(allAvailableTowns),
+        # )
 
         self.p1.hand.cards = [LocationCard(name=COALBROOKDALE)]
         self.p2.hand.cards = [LocationCard(name=COALBROOKDALE)]
@@ -650,6 +661,96 @@ class Test(unittest.TestCase):
         # #     print(b.name, ' in ',bl.town.name)
 
         # self.assertEqual(len(self.p2.getAvailableBuilds()[0]), 1, 'Shoould have overbuilding availablee after deveelopment')
+
+    def testScoutAction(self):
+
+        self.resetGame(2)
+
+        ox: TradePost = self.board.tradePostDict[OXFORD]
+        ox.merchantTiles = []
+        ox.supportedBuildings = set()
+
+        cottonMerch = Merchant(name=MerchantName.cotton)
+
+        ox.addMerchantTile(cottonMerch)
+        ox.addMerchantTile(Merchant(name=MerchantName.goods))
+
+        self.p1.money = 100
+        self.p1.hand.cards = [
+            LocationCard(name=REDDITCH),
+            LocationCard(name=REDDITCH),
+            LocationCard(name=REDDITCH),
+            LocationCard(name=REDDITCH),
+            LocationCard(name=REDDITCH),
+            LocationCard(name=REDDITCH),
+        ]
+
+        # Build Canal and Building
+        redditch = self.board.townDict[REDDITCH]
+        self.p1.buildBuilding(
+            BuildingName.coal, redditch.buildLocations[0], self.p1.hand.cards[2]
+        )
+
+        self.p1.buildCanal(redditch.networks[1], self.p1.hand.cards[0])
+        self.p1.buildCanal(redditch.networks[2], self.p1.hand.cards[1])
+        self.money = 30
+
+        # Build Canal and Cotton for opponent
+        self.p2.money = 100
+        self.p2.hand.cards = [
+            LocationCard(name=BIRMINGHAM),
+            LocationCard(name=BIRMINGHAM),
+            LocationCard(name=BIRMINGHAM),
+            LocationCard(name=BIRMINGHAM),
+        ]
+        birm: Town = self.board.townDict[BIRMINGHAM]
+
+        # print("Networks in Birmingham")
+        # for i, network in enumerate(birm.networks):
+        #     print(i, network)
+
+        self.p2.buildCanal(birm.networks[3], self.p2.hand.cards[0])
+        self.p2.buildCanal(birm.networks[4], self.p2.hand.cards[0])
+
+        cottonBuilding: MarketBuilding = self.p2.industryMat[BuildingName.cotton][-1]
+        self.p2.buildBuilding(
+            BuildingName.cotton, birm.buildLocations[0], self.p2.hand.cards[0]
+        )
+
+        self.p2.sell(
+            self.p2.hand.cards[0], [(cottonBuilding, [cottonMerch], cottonMerch)], []
+        )
+
+        self.p1.scout(
+            self.p1.hand.cards[-1], self.p1.hand.cards[-2], self.p1.hand.cards[-3]
+        )
+
+        self.assertEqual(
+            len(self.p1.hand.cards), 2, "Should have 2 cards after scouting"
+        )
+
+        ironBuilding = self.p1.industryMat[BuildingName.iron][-1]
+        ironBL: BuildLocation = birm.getBuildLocation(BuildingName.iron, 0)
+
+        availableBuilds, availableBuildings, availableBuildLocations = (
+            self.p1.getAvailableBuilds()
+        )
+
+        self.assertIn(
+            (ironBuilding, ironBL),
+            availableBuilds,
+            "Should have iron building available after scouting",
+        )
+        self.assertIn(
+            ironBuilding,
+            availableBuildings,
+            "Should have iron building available after scouting",
+        )
+        self.assertIn(
+            ironBL,
+            availableBuildLocations,
+            "Should have iron building available after scouting",
+        )
 
     def testIndustryMat(self):
         self.resetGame(2)

@@ -480,7 +480,7 @@ class Board:
     """
 
     def isBeerAvailableFromTradePosts(self, town: Town) -> bool:
-        # check for connection to tradeposts
+        # check for connection to
         for tradePost in self.tradePosts:
             if self.areNetworked(town, tradePost):
                 # enough money for beer amount?
@@ -812,13 +812,23 @@ class Board:
             roadLocation.road = None
             roadLocation.isBuilt = False
         for town in self.towns:
-            for network in town.networks:
-                network.road = None
-                network.isBuilt = False
+            town.networks = []
             for buildLocation in town.buildLocations:
                 if buildLocation.building and buildLocation.building.tier <= 1:
+
                     # Remove obsolete industries
                     buildLocation.building.isRetired = True
+                    buildLocation.building.owner.currentTowns.remove(town)
+                    buildLocation.building.owner.currentBuildings.remove(
+                        buildLocation.building
+                    )
+                    buildLocation.building = None
+
+        for player in self.players:
+            for network in player.currentNetworks:
+                network.road = None
+                network.isBuilt = False
+            player.currentNetworks = []
 
         # Reset merchant beer
         for tradepost in self.tradePosts:
