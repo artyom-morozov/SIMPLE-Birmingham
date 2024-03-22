@@ -337,14 +337,15 @@ class Board:
 
     def getCoalBuildings(self) -> List[IndustryBuilding]:
         l = []
-        for building in self.getAllBuildings():
-            if (
-                building
-                and building.type == BuildingType.industry
-                and building.name == BuildingName.coal
-                and building.resourceAmount > 0
-            ):
-                l.append(building)
+        for town in self.towns:
+            for buildLocation in town.buildLocations:
+                if (
+                    buildLocation.building
+                    and buildLocation.building.type == BuildingType.industry
+                    and buildLocation.building.name == BuildingName.coal
+                    and buildLocation.building.resourceAmount > 0
+                ):
+                    l.append(buildLocation.building)
         return l
 
     """
@@ -556,7 +557,72 @@ class Board:
                 l.append(tradePost)
         return l
 
-    def getAvailableCoalForTown(self, town: Town) -> List[IndustryBuilding | TradePost]:
+    def dfs_and_collect(self, town: Town, visited: Set[Town] = set()):
+
+        stack = [town]
+
+        while len(stack):
+            # Pop a vertex from stack and print it
+            t = stack[-1]
+            stack.pop()
+
+            # Stack may contain same vertex twice. So
+            # we need to print the popped item only
+            # if it is not visited.
+            if t not in visited:
+                visited.add(t)
+
+            # Get all adjacent vertices of the popped vertex s
+            # If a adjacent has not been visited, then push it
+            # to the stack.
+            for roadLocation in t.networks:
+                for newTown in roadLocation.towns:
+                    if newTown not in visited:
+                        stack.append(newTown)
+        return visited
+
+    def getTownsConnectedToCoal(
+        self, excludeCoalSource: Town | TradePost = None
+    ) -> Tuple[List[Town], List[Town | TradePost]]:
+        coalTowns: List[Town] = [
+            coalBuilding.buildLocation.town for coalBuilding in self.getCoalBuildings()
+        ]
+
+        townsConnectedToCoal = set()
+        townsConnectedtoMarket = set()  # towns connected to trade posts
+
+        for coalTown in coalTowns:
+            if (
+                excludeCoalSource
+                and coalTown.id == excludeCoalSource.id
+                and excludeCoalSource.getBuildLocation(
+                    BuildingName.coal
+                ).building.resourceAmount
+                < 2
+            ):
+                continue
+            self.dfs_and_collect(coalTown, townsConnectedToCoal)
+
+        for tradePost in self.tradePosts:
+            self.dfs_and_collect(tradePost, townsConnectedtoMarket)
+
+        return townsConnectedToCoal, townsConnectedtoMarket
+
+    def getTownsConnectedToBeer(self) -> List[Town]:
+        beerTowns: List[Town] = [
+            beerBuilding.buildLocation.town for beerBuilding in self.getBeerBuildings()
+        ]
+
+        townsConnectedToBeer = set()
+
+        for beerTown in beerTowns:
+            self.dfs_and_collect(beerTown, townsConnectedToBeer)
+
+        return townsConnectedToBeer
+
+    def getAvailableCoalForTown(
+        self, town: Town
+    ) -> Tuple[List[IndustryBuilding | TradePost], TradePost]:
         l: Deque[Building] = deque()
         connectedMarket = None
 
@@ -591,6 +657,40 @@ class Board:
                             v.add(_town.id)
 
         return l, connectedMarket
+
+    def getAvailableBeerForTown(self, town: Town) -> List[IndustryBuilding]:
+        l: Deque[Building] = deque()
+
+        q = deque([town])
+        v = set([town.id])
+
+        while q:
+            town: TradePost | Town = q.popleft()
+
+            # Verify if tradepost has beer
+            if isinstance(town, TradePost):
+                continue
+
+            # verify each town for coal
+            for bl in town.buildLocations:
+                if (
+                    bl.building
+                    and isinstance(bl.building, IndustryBuilding)
+                    and bl.building.type == BuildingType.industry
+                    and bl.building.name == BuildingName.beer
+                    and bl.building.resourceAmount > 0
+                ):
+                    l.append(bl.building)
+
+            # get town neighbors, add to q
+            for roadLocation in town.networks:
+                if roadLocation.isBuilt:
+                    for _town in roadLocation.towns:
+                        if _town.id not in v:
+                            q.append(_town)
+                            v.add(_town.id)
+
+        return l
 
     """
     getAvailableIronBuildingsTradePosts
@@ -680,7 +780,6 @@ class Board:
     def buildOneRailroad(self, roadLocation: RoadLocation, player: Player):
         player.pay(ONE_RAILROAD_PRICE)
         player.roadCount -= 1
-        self.removeXCoal(ONE_RAILROAD_COAL_PRICE, roadLocation.towns, player)
         roadLocation.build(Railroad(player))
 
     def buildTwoRailroads(
@@ -688,16 +787,6 @@ class Board:
     ):
         player.pay(TWO_RAILROAD_PRICE)
         player.roadCount -= 2
-        self.removeXCoal(
-            TWO_RAILROAD_COAL_PRICE,
-            [*roadLocation1.towns, *roadLocation2.towns],
-            player,
-        )
-        self.removeXBeer(
-            TWO_RAILROAD_BEER_PRICE,
-            [*roadLocation1.towns, *roadLocation2.towns],
-            player,
-        )
         roadLocation1.build(Railroad(player))
         roadLocation2.build(Railroad(player))
 

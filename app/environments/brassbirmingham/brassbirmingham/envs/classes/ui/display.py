@@ -17,6 +17,7 @@ from classes.buildings.market_building import MarketBuilding
 from classes.cards.industry_card import IndustryCard
 from classes.cards.location_card import LocationCard
 from classes.enums import ActionTypes, Era, GameState
+from classes.road_location import RoadLocation
 from classes.town import Town
 from classes.player import Player
 from classes.build_location import BuildLocation
@@ -598,16 +599,39 @@ class Display:
             if (
                 self.game_state == GameState.ROAD_CHOICE
                 and "type" in self.current_action
-                and self.current_action["type"] == ActionTypes.PlaceCanal
-                and not "road" in self.current_action
+                and (
+                    (
+                        self.current_action["type"] == ActionTypes.PlaceCanal
+                        and not "road" in self.current_action
+                    )
+                    or (
+                        self.current_action["type"] == ActionTypes.PlaceRailRoad
+                        and not "road1" in self.current_action
+                    )
+                    or (
+                        self.current_action["type"] == ActionTypes.PlaceSecondRoad
+                        and not "road2" in self.current_action
+                    )
+                )
                 and road in self.availableRoads
             ):
                 pygame.draw.circle(self.screen, GREEN, coords, 20, 3)
                 if self.mouse_click and pdist([coords, self.mouse_pos]) < 20:
                     print("clicked on road", road)
-                    self.current_action["road"] = road
+                    if self.current_action["type"] == ActionTypes.PlaceCanal:
+                        self.current_action["road"] = road
+                    elif self.current_action["type"] == ActionTypes.PlaceRailRoad:
+                        self.current_action["road1"] = road
+                    elif self.current_action["type"] == ActionTypes.PlaceSecondRoad:
+                        self.current_action["road2"] = road
                     self.mouse_click = False
-                    self.game_state = GameState.END_ACTION
+                    if self.current_action["type"] == ActionTypes.PlaceCanal:
+                        self.game_state = GameState.END_ACTION
+                    elif self.current_action["type"] in [
+                        ActionTypes.PlaceRailRoad,
+                        ActionTypes.PlaceSecondRoad,
+                    ]:
+                        self.game_state = GameState.COAL_CHOICE
 
     def drawBuildings(self):
         for town in self.game.board.towns:
@@ -761,6 +785,14 @@ class Display:
                         self.current_action["forSale"] = self.buildingsBeerPairs
                         if not "freeDevelop" in self.current_action:
                             self.current_action["freeDevelop"] = []
+                        self.apply_action()
+                    elif (
+                        self.current_action.get("type", False)
+                        == ActionTypes.PlaceSecondRoad
+                        and self.current_action.get("road1", False)
+                        and self.current_action.get("coalSource1", False)
+                    ):
+                        self.current_action["type"] = ActionTypes.PlaceRailRoad
                         self.apply_action()
                     elif (
                         self.game_state == GameState.LOAN_CHOICE
@@ -1001,7 +1033,11 @@ class Display:
         self.availableBuildingsForSale = (
             self.active_player.getAvailableBuildingsForSale()
         )
-        self.availableRoads = self.active_player.getAvailableNetworks()
+        self.availableRoads = (
+            self.active_player.getAvailableNetworks()
+            if self.game.board.era == Era.canal
+            else self.active_player.getAvailableRailroads()
+        )
         self.buildingsBeerPairs: List[
             Tuple[MarketBuilding, Tuple[IndustryBuilding | Merchant], Merchant]
         ] = []
@@ -1284,7 +1320,12 @@ class Display:
                             if coalNeeded <= 0:
                                 self.game_state = GameState.IRON_CHOICE
                                 break
-                    if connectedToMarket and coalNeeded > 0:
+                    if (
+                        connectedToMarket
+                        and coalNeeded > 0
+                        and self.active_player.money + 3
+                        >= self.game.board.priceForCoal(1)
+                    ):
                         x, y = 989, 375
                         coal_market_rect = pygame.Rect(x - 24, y - 20, 102, 350)
                         pygame.draw.rect(self.screen, GREEN, coal_market_rect, 3, 1)
@@ -1523,69 +1564,154 @@ class Display:
 
                 if self.current_action["type"] == ActionTypes.DevelopOneIndustry:
                     self.game_state = GameState.DEVELOP1_CHOICE
-                elif self.current_action["type"] == ActionTypes.PlaceCanal:
+                elif self.current_action["type"] in [
+                    ActionTypes.PlaceCanal,
+                    ActionTypes.PlaceRailRoad,
+                ]:
                     self.game_state = GameState.ROAD_CHOICE
-                elif (
-                    self.current_action["type"] == ActionTypes.PlaceRailRoad
-                    and "road2" not in self.current_action
-                ):
-                    self.game_state = GameState.COAL_CHOICE
                 else:
                     print(f"Should apply action now")
                     print(f"{self.current_action}")
                     self.game_state = GameState.END_ACTION
+
             elif (
                 self.game_state == GameState.COAL_CHOICE
                 and "type" in self.current_action
-                and (
-                    self.current_action["type"] == ActionTypes.PlaceRailRoad
-                    or self.current_action["type"] == ActionTypes.PlaceSecondRoad
-                )
+                and self.current_action["type"] == ActionTypes.PlaceRailRoad
+                and self.current_action.get("road1", False)
+                and not "coalSource1" in self.current_action
             ):
+                road_location: RoadLocation = self.current_action["road1"]
 
-                if self.current_action["building"].coalCost == 0:
+                availableCoalBuildings1, connectedToMarket1 = (
+                    self.game.board.getAvailableCoalForTown(road_location.towns[0])
+                )
 
-                    self.game_state = GameState.IRON_CHOICE
-                else:
-                    availableCoalBuildings, connectedToMarket = (
-                        self.game.board.getAvailableCoalForTown(
-                            self.current_action["buildLocation"].town
+                availableCoalBuildings2, connectedToMarket2 = (
+                    self.game.board.getAvailableCoalForTown(road_location.towns[1])
+                )
+
+                availableCoalBuildings = availableCoalBuildings1.union(
+                    availableCoalBuildings2
+                )
+
+                connectedToMarket = [connectedToMarket1, connectedToMarket2]
+                connectedToMarket = set([c for c in connectedToMarket if c is not None])
+
+                for coalBuilding in availableCoalBuildings:
+                    x, y = self.buildLocationCoords[coalBuilding.buildLocation.id]
+                    building_selection_rect = pygame.Rect(x - 25, y - 25, 50, 50)
+                    pygame.draw.rect(self.screen, GREEN, building_selection_rect, 3, 1)
+                    if mouse_click and building_selection_rect.collidepoint(
+                        mouse_pos[0], mouse_pos[1]
+                    ):
+                        self.current_action["coalSource1"] = coalBuilding
+                        self.availableRoads = self.active_player.getAvailableRailroads(
+                            firstCoalSource=coalBuilding.buildLocation.town
                         )
-                    )
 
-                    print("Available coal buildings", availableCoalBuildings)
-                    print("Connected to market", connectedToMarket)
+                        if (
+                            len(self.availableRoads) > 0
+                            and self.active_player.money >= 15
+                        ):
+                            self.current_action["type"] = ActionTypes.PlaceSecondRoad
+                            self.game_state = GameState.ROAD_CHOICE
+                        else:
+                            self.game_state = GameState.END_ACTION
 
-                    coalNeeded = self.current_action["building"].coalCost
-
-                    if not self.availableBuildLocations and not connectedToMarket:
-                        raise RuntimeError("No coal available for building")
-
-                    # Coal cost can be 1 or 2 so we need to select connected coal industry or coal market
-                    for building in availableCoalBuildings:
-                        x, y = self.buildLocationCoords[building.buildLocation.id]
-                        building_selection_rect = pygame.Rect(x - 25, y - 25, 50, 50)
-                        pygame.draw.rect(
-                            self.screen, GREEN, building_selection_rect, 3, 1
+                if (
+                    len(connectedToMarket) > 0
+                    and self.active_player.money >= self.game.board.priceForCoal(1) + 5
+                ):
+                    x, y = 989, 375
+                    coal_market_rect = pygame.Rect(x - 24, y - 20, 102, 350)
+                    pygame.draw.rect(self.screen, GREEN, coal_market_rect, 3, 1)
+                    if mouse_click and coal_market_rect.collidepoint(
+                        mouse_pos[0], mouse_pos[1]
+                    ):
+                        self.current_action["coalSource1"] = connectedToMarket.pop()
+                        self.availableRoads = self.active_player.getAvailableRailroads(
+                            firstCoalSource=self.current_action["coalSource1"]
                         )
-                        if mouse_click and building_selection_rect.collidepoint(
-                            mouse_pos[0], mouse_pos[1]
+                        if len(
+                            self.availableRoads
+                        ) > 0 and self.active_player.money >= 15 + self.game.board.priceForCoal(
+                            1
                         ):
-                            self.current_action["coalSources"].append(building)
-                            coalNeeded -= building.resourceAmount
-                            if coalNeeded <= 0:
-                                self.game_state = GameState.IRON_CHOICE
-                                break
-                    if connectedToMarket and coalNeeded > 0:
-                        x, y = 989, 375
-                        coal_market_rect = pygame.Rect(x - 24, y - 20, 102, 350)
-                        pygame.draw.rect(self.screen, GREEN, coal_market_rect, 3, 1)
-                        if mouse_click and coal_market_rect.collidepoint(
-                            mouse_pos[0], mouse_pos[1]
-                        ):
-                            self.current_action["coalSources"].append(connectedToMarket)
-                            self.game_state = GameState.IRON_CHOICE
+                            self.current_action["type"] = ActionTypes.PlaceSecondRoad
+                            self.game_state = GameState.ROAD_CHOICE
+                        else:
+                            self.game_state = GameState.END_ACTION
 
+            elif (
+                self.game_state == GameState.COAL_CHOICE
+                and "type" in self.current_action
+                and self.current_action["type"] == ActionTypes.PlaceSecondRoad
+                and self.current_action.get("road2", False)
+                and not "coalSource2" in self.current_action
+            ):
+                road_location: RoadLocation = self.current_action["road2"]
+
+                availableCoalBuildings1, connectedToMarket1 = (
+                    self.game.board.getAvailableCoalForTown(road_location.towns[0])
+                )
+
+                availableCoalBuildings2, connectedToMarket2 = (
+                    self.game.board.getAvailableCoalForTown(road_location.towns[1])
+                )
+
+                availableCoalBuildings = availableCoalBuildings1.union(
+                    availableCoalBuildings2
+                )
+
+                connectedToMarket = [connectedToMarket1, connectedToMarket2]
+                connectedToMarket = set([c for c in connectedToMarket if c is not None])
+
+                for coalBuilding in availableCoalBuildings:
+                    x, y = self.buildLocationCoords[coalBuilding.buildLocation.id]
+                    building_selection_rect = pygame.Rect(x - 25, y - 25, 50, 50)
+                    pygame.draw.rect(self.screen, GREEN, building_selection_rect, 3, 1)
+                    if mouse_click and building_selection_rect.collidepoint(
+                        mouse_pos[0], mouse_pos[1]
+                    ):
+                        self.game_state = GameState.END_ACTION
+
+                marketPrice = (
+                    self.game.board.priceForCoal(1)
+                    if isinstance(self.current_action["coalSource1"], Town)
+                    else self.game.board.priceForCoal(2)
+                )
+                if (
+                    len(connectedToMarket) > 0
+                    and self.active_player.money >= marketPrice + 15
+                ):
+                    x, y = 989, 375
+                    coal_market_rect = pygame.Rect(x - 24, y - 20, 102, 350)
+                    pygame.draw.rect(self.screen, GREEN, coal_market_rect, 3, 1)
+                    if mouse_click and coal_market_rect.collidepoint(
+                        mouse_pos[0], mouse_pos[1]
+                    ):
+                        self.current_action["coalSource2"] = connectedToMarket.pop()
+                        self.currentBeerCost = 1
+                        self.availableBeers = set(
+                            self.active_player.getOwnBeerSources()
+                        )
+
+                        for town in self.current_action["road2"].towns:
+                            self.availableBeers = self.availableBeers.update(
+                                self.game.board.getAvailableBeerForTown(town)
+                            )
+
+                        self.game_state = GameState.BEER_CHOICE
+            elif (
+                (self.game_state == GameState.BEER_CHOICE)
+                and "type" in self.current_action
+                and self.current_action["type"] == ActionTypes.PlaceSecondRoad
+                and self.currentBeerCost == 0
+                and self.currentBeers != []
+            ):
+                self.current_action["beerSource"] = self.currentBeers.pop()
+                self.game_state = GameState.END_ACTION
             pygame.display.update()
             self.game_log_sftext.post_update()
             pygame.event.pump()

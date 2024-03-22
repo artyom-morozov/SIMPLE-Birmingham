@@ -101,7 +101,7 @@ class Player:
     """
 
     def getCurrentNetworks(self) -> Set[RoadLocation]:
-        return self.currentBuildings
+        return self.currentNetworks
 
     def getCurrentBuildings(self) -> Set[Building]:
         return self.currentBuildings
@@ -658,18 +658,41 @@ class Player:
 
         return merchants, beers, beerFromBreweries + beerFromTradePosts
 
-    def getAvailableRailroads(self, second: bool = False) -> Set[RoadLocation]:
+    def getOwnBeerSources(self) -> Set[IndustryBuilding]:
+        sources = set()
+        for building in self.currentBuildings:
+            if building.isBeerBuilding():
+                sources.add(building)
+        return sources
+
+    def getAvailableRailroads(self, firstCoalSource: Town = None) -> Set[RoadLocation]:
         assert self.board.era == Era.railroad
-        potentialRailRoads: Set[RoadLocation] = set()
         potenitalRoads: Set[RoadLocation] = self.getAvailableNetworks()
+        potentialRailRoads: Set[RoadLocation] = set()
+
+        townsConnectedToCoal, townsConnectedToMarket = (
+            self.board.getTownsConnectedToCoal(firstCoalSource)
+        )
+
+        ownBeerSources: Set[IndustryBuilding] = self.getOwnBeerSources()
+
+        townsConnectedToBeer: Set[Town] = self.board.getTownsConnectedToBeer()
 
         for roadLocation in potenitalRoads:
             for town in roadLocation.towns:
-                self.board.getAvailableCoalForTown(town)
                 if (
-                    len() >= 1
+                    not town in townsConnectedToCoal
+                    and not town in townsConnectedToMarket
                 ):
-                    potentialRailRoads.add(roadLocation)
+                    continue
+                if firstCoalSource and not (
+                    len(ownBeerSources) > 0 or town in townsConnectedToBeer
+                ):
+                    continue
+
+                potentialRailRoads.add(roadLocation)
+                break
+        return potentialRailRoads
 
     # Get a list off all available road locations where a road could be build
     def getAvailableNetworks(self) -> Set[RoadLocation]:
@@ -982,18 +1005,39 @@ class Player:
         self.currentNetworks.add(roadLocation)
         self.hand.spendCard(discard)
 
-    def buildOneRailroad(self, roadLocation: RoadLocation, discard: Card):
+    def buildOneRailroad(
+        self,
+        discard: Card,
+        roadLocation: RoadLocation,
+        coalSource: IndustryBuilding | TradePost,
+    ):
         assert self.isCardInHand(discard)
         assert self.canBuildOneRailroad(roadLocation)
+
+        price = 5 + self.board.consumeCoal(coalSource, 1)
+        self.pay(price)
         self.board.buildOneRailroad(roadLocation, self)
         self.currentNetworks.add(roadLocation)
         self.hand.spendCard(discard)
 
     def buildTwoRailroads(
-        self, roadLocation1: RoadLocation, roadLocation2: RoadLocation, discard: Card
+        self,
+        discard: Card,
+        roadLocation1: RoadLocation,
+        roadLocation2: RoadLocation,
+        coalSources: List[IndustryBuilding | TradePost],
+        beerSource: IndustryBuilding,
     ):
         assert self.isCardInHand(discard)
         assert self.canBuildTwoRailroads(roadLocation1, roadLocation2)
+        assert len(coalSources) == 2
+
+        price = 15
+
+        for coalSource in coalSources:
+            price += self.board.consumeCoal(coalSource, 1)
+        self.pay(price)
+
         self.board.buildTwoRailroads(roadLocation1, roadLocation2, self)
         self.currentNetworks.add(roadLocation1, roadLocation2)
         self.hand.spendCard(discard)

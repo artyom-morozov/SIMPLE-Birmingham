@@ -147,8 +147,11 @@ class Game:
             action["type"] == ActionTypes.PlaceRailRoad
             and "card" in action
             and "road1" in action
+            and "coalSource1" in action
         ):
-            player.buildOneRailroad(action["road1"], action["card"])
+            player.buildOneRailroad(
+                action["card"], action["road1"], action["coalSource1"]
+            )
             message[
                 "text"
             ] += f"{player.name} built railroad: {action['road1'].towns[0].name} -- {action['road1'].towns[1].name}"
@@ -157,8 +160,17 @@ class Game:
             and "card" in action
             and "road1" in action
             and "road2" in action
+            and "coalSource1" in action
+            and "coalSource2" in action
+            and "beerSource" in action
         ):
-            player.buildTwoRailroads(action["road1"], action["road2"], action["card"])
+            player.buildTwoRailroads(
+                action["card"],
+                action["road1"],
+                action["road2"],
+                [action["coalSource1"], action["coalSource2"]],
+                action["beerSource"],
+            )
             message["text"] += f"{player.name} built 2 railroads:\n "
 
             for road in (action["road1"], action["road2"]):
