@@ -1,18 +1,30 @@
 from __future__ import annotations
-from collections import deque
+from collections import defaultdict, deque
 
 import copy
-from typing import TYPE_CHECKING, Dict, List, Set, Tuple
+from typing import TYPE_CHECKING, Deque, Dict, List, Set, Tuple
 from numpy.random import shuffle
 from .cards.enums import CardName
 from .cards.industry_card import IndustryCard
 from .cards.location_card import LocationCard
 
-from consts import (CANAL_PRICE, MAX_MARKET_COAL, MAX_MARKET_IRON,
-                    ONE_RAILROAD_COAL_PRICE, ONE_RAILROAD_PRICE,
-                    ROAD_LOCATIONS, STARTING_CARDS, STARTING_HAND_SIZE,
-                    STARTING_ROADS, TOWNS, TRADEPOSTS, TWO_RAILROAD_COAL_PRICE, TWO_RAILROAD_BEER_PRICE,
-                    TWO_RAILROAD_PRICE, MERCHANT_TILES)
+from consts import (
+    CANAL_PRICE,
+    MAX_MARKET_COAL,
+    MAX_MARKET_IRON,
+    ONE_RAILROAD_COAL_PRICE,
+    ONE_RAILROAD_PRICE,
+    ROAD_LOCATIONS,
+    STARTING_CARDS,
+    STARTING_HAND_SIZE,
+    STARTING_ROADS,
+    TOWNS,
+    TRADEPOSTS,
+    TWO_RAILROAD_COAL_PRICE,
+    TWO_RAILROAD_BEER_PRICE,
+    TWO_RAILROAD_PRICE,
+    MERCHANT_TILES,
+)
 from python.id import id
 from python.print_colors import *
 
@@ -35,7 +47,7 @@ if TYPE_CHECKING:
 
 
 class Board:
-    def __init__(self, numPlayers: int, test = False):
+    def __init__(self, numPlayers: int, test=False):
         self.id = id()
         self.numPlayers = numPlayers
         self.era = Era.canal
@@ -47,16 +59,23 @@ class Board:
         self.tradePosts = copy.deepcopy(TRADEPOSTS[str(numPlayers)])
         self.tradePostDict = {}
         self.merchantTiles = copy.deepcopy(MERCHANT_TILES[str(numPlayers)])
-        self.merchants = [Merchant(name=merchantName) for merchantName in self.merchantTiles]
+        self.merchants = [
+            Merchant(name=merchantName) for merchantName in self.merchantTiles
+        ]
 
         self.coalMarketRemaining = MAX_MARKET_COAL - 1  # coal market missing 1
         self.ironMarketRemaining = MAX_MARKET_IRON - 2  # iron market missing 1
         self.roadLocations = copy.deepcopy(ROAD_LOCATIONS)
         self.players: List[Player] = []  # array of Player objects
-        
-        self.wildIndustryCards = [IndustryCard(name=CardName.wild_industry), IndustryCard(name=CardName.wild_industry)]
-        self.wildlocationCards = [LocationCard(name=CardName.wild_location), LocationCard(name=CardName.wild_location)]
 
+        self.wildIndustryCards = [
+            IndustryCard(name=CardName.wild_industry),
+            IndustryCard(name=CardName.wild_industry),
+        ]
+        self.wildlocationCards = [
+            LocationCard(name=CardName.wild_location),
+            LocationCard(name=CardName.wild_location),
+        ]
 
         for town in self.towns:
             town.addBoard(self)  # ref board to towns
@@ -75,8 +94,9 @@ class Board:
             for roadLocation in self.roadLocations:
                 if tradePost.name in roadLocation.networks:
                     tradePost.addRoadLocation(roadLocation)
-        
-        # init merchant tiles 
+
+        self.playerPoints = {}
+        # init merchant tiles
 
         mechantTileId = 0
         if not test:
@@ -109,12 +129,11 @@ class Board:
             shuffle(self.players)
         else:
             self.players.sort(key=lambda p: p.spentThisTurn)
-        
+
         for i in range(len(self.players)):
             self.players[i].player_order = i
 
         return self.players[0].id
-
 
     def getAllBuildings(self) -> List[Building]:
         l = []
@@ -166,8 +185,6 @@ class Board:
             currIronRemaining = max(currIronRemaining - 1, 0)
         return price
 
-
-
     """
     areNetworked
     
@@ -179,7 +196,7 @@ class Board:
     def areNetworked(
         self, t1: Town | Building | TradePost, t2: Town | Building | TradePost
     ) -> bool:
-        #town contains building
+        # town contains building
         if type(t1) == Town and t2:
             for buildLocation in t1.buildLocations:
                 if buildLocation.building and buildLocation.building.id == t2.id:
@@ -188,7 +205,6 @@ class Board:
             for buildLocation in t2.buildLocations:
                 if buildLocation.building and buildLocation.building.id == t1.id:
                     return True
-                
 
         q = deque([t1])
         v = set(t1.id)
@@ -204,10 +220,13 @@ class Board:
                             v.add(_town.id)
                             if _town.id == t2.id:
                                 return True
-                            
+
                             if type(_town) == Town:
                                 for buildLocation in _town.buildLocations:
-                                    if buildLocation.building and buildLocation.building.id == t2.id:
+                                    if (
+                                        buildLocation.building
+                                        and buildLocation.building.id == t2.id
+                                    ):
                                         return True
         return False
 
@@ -224,9 +243,7 @@ class Board:
             if len(availableCoal) == 0:
                 continue
 
-            _available = availableCoal.pop(
-                0
-            )
+            _available = availableCoal.pop(0)
             while X > 0:
                 if _available.type == "TradePost":
                     cost = self.priceForCoal(X)
@@ -254,9 +271,7 @@ class Board:
         if len(availableIron) == 0:
             raise ValueError("Attempted to remove Iron but no iron is available")
 
-        _available = availableIron.pop(
-            0
-        )
+        _available = availableIron.pop(0)
         while X > 0:
             if _available.type == "TradePost":
                 cost = self.priceForIron(X)
@@ -267,8 +282,8 @@ class Board:
                 _available.decreaseResourceAmount(1)
                 if _available.resourceAmount == 0:
                     if len(availableIron) == 0:
-                            assert X == 1
-                            return
+                        assert X == 1
+                        return
                     _available = availableIron.pop(0)
             X -= 1
         return
@@ -282,7 +297,6 @@ class Board:
             player.income += post.incomeGained
         elif post.victoryPointsGained > 0:
             player.victoryPoints += post.victoryPointsGained
-        
 
     """
     removeXBeer
@@ -297,9 +311,7 @@ class Board:
             if len(availableBeer) == 0:
                 continue
 
-            _available = availableBeer.pop(
-                0
-            )
+            _available = availableBeer.pop(0)
             while X > 0:
                 if _available.type == "TradePost":
                     if _available.beerAmount > 0:
@@ -387,14 +399,12 @@ class Board:
                 return True
         return False
 
-
-
     def findInNetwork(self, town: Town, function) -> bool:
         q = deque([town])
         v = set([town.id])
 
         while q:
-            town: TradePost | Town = q.popleft()  
+            town: TradePost | Town = q.popleft()
 
             # Verify if tradepost has beer
             if function(town):
@@ -421,8 +431,6 @@ class Board:
 
         # check for towns with iron available
         return len(self.getIronBuildings()) > 0
-
-    
 
     """
     isBeerAvailableFromBuildings
@@ -548,13 +556,47 @@ class Board:
                 l.append(tradePost)
         return l
 
+    def getAvailableCoalForTown(self, town: Town) -> List[IndustryBuilding | TradePost]:
+        l: Deque[Building] = deque()
+        connectedMarket = None
+
+        q = deque([town])
+        v = set([town.id])
+
+        while q:
+            town: TradePost | Town = q.popleft()
+
+            # Verify if tradepost has beer
+            if isinstance(town, TradePost):
+                connectedMarket = town
+                continue
+
+            # verify each town for coal
+            for bl in town.buildLocations:
+                if (
+                    bl.building
+                    and isinstance(bl.building, IndustryBuilding)
+                    and bl.building.type == BuildingType.industry
+                    and bl.building.name == BuildingName.coal
+                    and bl.building.resourceAmount > 0
+                ):
+                    l.append(bl.building)
+
+            # get town neighbors, add to q
+            for roadLocation in town.networks:
+                if roadLocation.isBuilt:
+                    for _town in roadLocation.towns:
+                        if _town.id not in v:
+                            q.append(_town)
+                            v.add(_town.id)
+
+        return l, connectedMarket
+
     """
     getAvailableIronBuildingsTradePosts
     :return: buildings/tradeposts with iron"""
 
-    def getAvailableIronBuildingsTradePosts(
-        self
-    ) -> List[IndustryBuilding | TradePost]:
+    def getAvailableIronBuildingsTradePosts(self) -> List[IndustryBuilding | TradePost]:
         ironBuildings = self.getIronBuildings()
         l = []
         for ironBuilding in ironBuildings:
@@ -585,7 +627,6 @@ class Board:
                     l.append(tradePost)
         return l
 
-
     """
     buildBuilding
     
@@ -602,21 +643,35 @@ class Board:
         buildLocation.addBuilding(building)
         building.build(buildLocation)
 
-        if building.name == BuildingName.iron and self.ironMarketRemaining < MAX_MARKET_IRON:
+        if (
+            building.name == BuildingName.iron
+            and self.ironMarketRemaining < MAX_MARKET_IRON
+        ):
             ironBuilding: IndustryBuilding = building
             available_space_in_market = MAX_MARKET_IRON - self.ironMarketRemaining
-            resources_to_transfer = min(ironBuilding.resourceAmount, available_space_in_market)
+            resources_to_transfer = min(
+                ironBuilding.resourceAmount, available_space_in_market
+            )
             self.ironMarketRemaining += resources_to_transfer
+            reward = self.priceForIron(resources_to_transfer)
+            player.money += reward
             ironBuilding.decreaseResourceAmount(resources_to_transfer)
         # Fill coal
-        if building.name == BuildingName.coal and self.coalMarketRemaining < MAX_MARKET_COAL and self.findInNetwork(town=buildLocation.town, function=lambda t: isinstance(t, TradePost)):
+        if (
+            building.name == BuildingName.coal
+            and self.coalMarketRemaining < MAX_MARKET_COAL
+            and self.findInNetwork(
+                town=buildLocation.town, function=lambda t: isinstance(t, TradePost)
+            )
+        ):
             coalBuilding: IndustryBuilding = building
             available_space_in_market = MAX_MARKET_COAL - self.coalMarketRemaining
-            resources_to_transfer = min(coalBuilding.resourceAmount, available_space_in_market)
+            resources_to_transfer = min(
+                coalBuilding.resourceAmount, available_space_in_market
+            )
             self.coalMarketRemaining += resources_to_transfer
             coalBuilding.decreaseResourceAmount(resources_to_transfer)
-    
-    
+
     def buildCanal(self, roadLocation: RoadLocation, player: Player):
         player.pay(CANAL_PRICE)
         player.roadCount -= 1
@@ -641,7 +696,7 @@ class Board:
         self.removeXBeer(
             TWO_RAILROAD_BEER_PRICE,
             [*roadLocation1.towns, *roadLocation2.towns],
-            player
+            player,
         )
         roadLocation1.build(Railroad(player))
         roadLocation2.build(Railroad(player))
@@ -657,27 +712,32 @@ class Board:
     #     for building in buildings:
     #         building.sell()
 
-    def consumeCoal(self, coalSource: IndustryBuilding | TradePost, coalNeeded: int) -> int:
+    def consumeCoal(
+        self, coalSource: IndustryBuilding | TradePost, coalNeeded: int
+    ) -> int:
         if isinstance(coalSource, TradePost):
             coalCost = self.priceForCoal(coalNeeded)
             self.coalMarketRemaining = max(self.coalMarketRemaining - coalNeeded, 0)
             return coalCost
         coalSource.decreaseResourceAmount(coalNeeded)
         return 0
-    
 
-
-    def consumeBeer(self, building: MarketBuilding, beerSource: IndustryBuilding | Merchant):
+    def consumeBeer(
+        self, building: MarketBuilding, beerSource: IndustryBuilding | Merchant
+    ):
         if isinstance(beerSource, Merchant):
             assert beerSource.hasBeer == True
             beerSource.hasBeer = False
             self.giveTradePostBonus(player=building.owner, post=beerSource.tradePost)
             return
         beerSource.decreaseResourceAmount(1)
-    
 
-    
-    def sellBuilding(self, player: Player, building: MarketBuilding, beerSources: Tuple[IndustryBuilding | Merchant] ):
+    def sellBuilding(
+        self,
+        player: Player,
+        building: MarketBuilding,
+        beerSources: Tuple[IndustryBuilding | Merchant],
+    ):
         if building.beerCost == 0:
             building.sell()
         elif building.beerCost == 1:
@@ -690,11 +750,27 @@ class Board:
             building.sell()
 
     def getVictoryPoints(self) -> Dict[Player, int]:
-        points = {player: player.victoryPoints for player in self.players}
+        points = defaultdict(int)
 
         for building in self.getAllBuildings():
             if building.isFlipped and not building.isRetired:
-                points[building.owner] += building.victoryPointsGained
+                points[building.owner.id] += building.victoryPointsGained
+
+        print("Points for buildings:")
+        for playerId, point_num in points.items():
+            print(f"Player {playerId}: {point_num}")
+
+        for player in self.players:
+            amount = 0
+            for network in player.currentNetworks:
+                if network.road and network.isBuilt:
+                    for town in network.road.towns:
+                        if isinstance(town, Town):
+                            amount += town.getNetworkVictoryPoints()
+                        elif isinstance(town, TradePost):
+                            amount += town.networkPoints
+            print(f"Network points for {player.name}: {amount}")
+            points[player.id] += amount
 
         for town in self.towns:
             for network in town.networks:
@@ -720,18 +796,16 @@ class Board:
             assert len(player.hand.cards) == 0
 
         # Calculate player points
-        playerPoints = self.getVictoryPoints()
+        self.playerPoints = self.getVictoryPoints()
 
         # Shuffle draw deck
         self.deck = Deck(copy.deepcopy(STARTING_CARDS[str(self.numPlayers)]))
         # Set points to each player
         # Draw new hand
-        for [player, points] in playerPoints.items():
+        for [player, points] in self.playerPoints.items():
             player.victoryPoints = points
             player.roadCount = STARTING_ROADS
-            player.hand = Hand(self.deck)
-            for _ in range(STARTING_HAND_SIZE):
-                player.hand.draw()
+            player.hand = Hand(self.deck.draw(STARTING_HAND_SIZE))
 
         # Remove links
         for roadLocation in self.roadLocations:
@@ -751,3 +825,5 @@ class Board:
             tradepost.beerAmount = tradepost.startingBeerAmount
 
         self.era = Era.railroad
+
+        return self.playerPoints

@@ -55,3 +55,5 @@ class IndustryBuilding(Building):
         self.resourceAmount -= amount
 
         self.isFlipped = self.resourceAmount == 0
+        if self.isFlipped:
+            self.owner.income += self.incomeGained

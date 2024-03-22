@@ -3,24 +3,22 @@ import random
 import copy
 from collections import defaultdict, deque
 
-from classes.enums import Era, PlayerId
+from classes.enums import ActionTypes, Era, PlayerId
 from classes.player import Player
 
 from .board import Board
 
 
-ROUNDS_PER_PLAYER_NUM = {
-    '2': 10,
-    '3': 9,
-    '4':  8
-}
+ROUNDS_PER_PLAYER_NUM = {"2": 10, "3": 9, "4": 8}
 
 PLAYER_COLORS = ["Red", "Blue", "Green", "Yellow"]
 PLAYER_NAMEES = ["Owen", "Brunel", "Arkwright", "Coade"]
 
-class Game:
-    def __init__(self, num_players=2, interactive=False, debug_mode=False, policies=None):
 
+class Game:
+    def __init__(
+        self, num_players=2, interactive=False, debug_mode=False, policies=None
+    ):
 
         self.num_players = num_players
         self.max_turns = ROUNDS_PER_PLAYER_NUM[str(num_players)]
@@ -29,44 +27,48 @@ class Game:
         self.debug_mode = debug_mode
         self.policies = policies
         self.players_go_index = 0
+        self.winner = 0
+        self.playerVPS = {}
 
         if interactive:
             self.display = self.initDisplay(interactive, debug_mode, policies)
         else:
             self.display = None
-        
-        
-
-
 
     def render(self):
         if self.display is None:
-            self.display = self.initDisplay(self.interactive, self.debug_mode, self.policies)
+            self.display = self.initDisplay(
+                self.interactive, self.debug_mode, self.policies
+            )
 
         self.display.render()
-    
+
     def initDisplay(self, interactive, debug_mode, policies):
         from classes.ui.display import Display as GameDisplay
-        return GameDisplay(self, interactive=interactive, debug_mode=debug_mode, policies=policies)
+
+        return GameDisplay(
+            self, interactive=interactive, debug_mode=debug_mode, policies=policies
+        )
 
     def reset(self):
         self.board = Board(self.num_players)
         self.players = {}
         self.action_history = defaultdict(list)
         self.turn = 1
-        for color in PLAYER_COLORS[:self.num_players]:
+        for color in PLAYER_COLORS[: self.num_players]:
             id = PlayerId[color]
-            self.players[id] = Player(name=PLAYER_NAMEES[id-1], board=self.board, playerId=id)
+            self.players[id] = Player(
+                name=PLAYER_NAMEES[id - 1], board=self.board, playerId=id
+            )
+            print(f"Player {id} cards: {self.players[id].hand.cards}")
 
         # set player order
         self.players_go = self.board.orderPlayers(random=True)
         self.players_go_index = 0
-        
+
         self.first_round = True
         self.player_has_to_liquidate = False
         self.players_to_liquidate = []
-
-
 
     # determine the order of the next player to go
     def change_order(self):
@@ -90,13 +92,106 @@ class Game:
             # Points greater than 99 return 30
             return 30
 
+    def do_action(self, action):
+        player: Player = self.get_active_player()
+        if "type" not in action:
+            raise ValueError("Action must have a type")
+
+        print(f"Doing action {action} for player {player.id}")
+        if action["type"] == ActionTypes.Loan and "card" in action:
+            player.loan(action["card"])
+        elif action["type"] == ActionTypes.Pass and "card" in action:
+            player.passTurn(action["card"])
+        elif (
+            action["type"] == ActionTypes.Scout
+            and "card1" in action
+            and "card2" in action
+            and "card3" in action
+        ):
+            player.scout(action["card1"], action["card2"], action["card3"])
+        elif (
+            action["type"] == ActionTypes.Sell
+            and "card" in action
+            and "forSale" in action
+            and "freeDevelop" in action
+        ):
+            player.sell(action["card"], action["forSale"], action["freeDevelop"])
+        elif (
+            action["type"] == ActionTypes.PlaceRailRoad
+            and "card" in action
+            and "road1" in action
+        ):
+            player.buildOneRailroad(action["road1"], action["card"])
+        elif (
+            action["type"] == ActionTypes.PlaceSecondRoad
+            and "card" in action
+            and "road1" in action
+            and "road2" in action
+        ):
+            player.buildTwoRailroads(action["road1"], action["road2"], action["card"])
+        elif (
+            action["type"] == ActionTypes.BuildIndustry
+            and "building" in action
+            and "buildLocation" in action
+            and "coalSources" in action
+            and "ironSources" in action
+            and "card" in action
+        ):
+            player.buildBuilding(
+                action["building"].name,
+                action["buildLocation"],
+                action["card"],
+                action["coalSources"],
+                action["ironSources"],
+            )
+        elif (
+            action["type"] == ActionTypes.PlaceCanal
+            and "road" in action
+            and "card" in action
+        ):
+            player.buildCanal(
+                roadLocation=action["road"],
+                discard=action["card"],
+            )
+        elif (
+            action["type"] == ActionTypes.DevelopOneIndustry
+            and "card" in action
+            and "industry1" in action
+            and "ironSources" in action
+        ):
+            player.developOneIndustry(
+                action["industry1"],
+                action["card"],
+                action["ironSources"],
+            )
+        elif (
+            action["type"] == ActionTypes.DevelopTwoIndustries
+            and "card" in action
+            and "industry1" in action
+            and "industry2" in action
+            and "ironSources" in action
+        ):
+            player.developTwoIndustries(
+                action["industry1"],
+                action["industry2"],
+                action["card"],
+                action["ironSources"],
+            )
+        else:
+            raise ValueError(f"Invalid action {action} for player {player.id}")
+
     def next_action(self, action):
         # if self.interactive:
         #     self.display.render()
         player = self.get_active_player()
+        self.do_action(action)
+
         self.save_action(player.id, action)
 
-        if len(self.action_history[(self.turn, player.id)]) == self.get_num_actions():
+        if (
+            len(self.action_history[(self.turn, player.id)]) >= self.get_num_actions()
+            and player.freeDevelopCount == 0
+        ):
             self.players_go_index += 1
             if self.players_go_index == self.num_players:
                 self.players_go_index = 0
@@ -104,12 +199,10 @@ class Game:
             return False
         return True
 
-        
-
     def start_new_turn(self):
         # check if end game/ era change
         if self.board.era == Era.canal and self.turn >= self.max_turns:
-            self.board.endCanalEra()
+            self.playerVPS = self.board.endCanalEra()
             self.turn = 0
             return
         if self.board.era == Era.railroad and self.turn >= self.max_turns:
@@ -117,28 +210,22 @@ class Game:
             self.turn = 0
             return
 
-
-        # determine spend order and reset 
+        # determine spend order and reset
         self.players_go = self.board.orderPlayers()
 
-        # reset spend amount and give income 
+        # reset spend amount and give income
         for player in self.board.players:
             player.spentThisTurn = 0
             incomeMoney = player.incomeLevel()
-            if player.money + incomeMoney < 0 :
+            if player.money + incomeMoney < 0:
                 self.player_has_to_liquidate = True
 
                 self.players_to_liquidate = player
                 return
             player.money += incomeMoney
 
-            num_cards_to_draw = 1 if self.first_round else 2
-            player.hand.draw(num_cards_to_draw)
-                
+            player.hand.cards.extend(self.board.deck.draw(self.get_num_actions()))
 
-
-
-        
         if self.turn == 1:
             self.first_round = False
 
@@ -235,12 +322,13 @@ class Game:
         # state["die_2"] = self.die_2
 
         # return state
+
     def save_action(self, player_id: str, action: dict):
         self.action_history[(self.turn, player_id)].append(action)
-            
+
     def restore_state(self, state):
 
-        state = copy.deepcopy(state) #prevent state being changed
+        state = copy.deepcopy(state)  # prevent state being changed
 
         self.players_to_discard = state["players_to_discard"]
         self.players_need_to_discard = state["players_need_to_discard"]
@@ -294,7 +382,6 @@ class Game:
         #     harbour.corners.append(corner_1)
         #     harbour.corners.append(corner_2)
         #     harbour.edge = edge
-
 
         # for key, player_state in state["players"].items():
         #     self.players[key].id = player_state["id"]

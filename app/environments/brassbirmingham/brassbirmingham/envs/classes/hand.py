@@ -18,7 +18,6 @@ class Hand:
         self.cards: List[Card] = cards
         self.discard = []
 
-
     def spendCard(self, card: Card):
         self.cards = list(
             filter(lambda x: x.id != card.id, self.cards)
@@ -39,5 +38,6 @@ class Hand:
 
     def __repr__(self):
         return self.cards
+
     def __str__(self):
         return str(self.cards)

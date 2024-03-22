@@ -1,8 +1,8 @@
-from python.print_colors import (prCyan, prGreen, prLightGray, prPurple, prRed,
-                                 prYellow)
+from python.print_colors import prCyan, prGreen, prLightGray, prPurple, prRed, prYellow
 
 from .card import Card
 from .enums import CardName, CardType, Colours
+
 # towns
 LEEK = "Leek"
 STOKE_ON_TRENT = "Stoke-On-Trent"
@@ -26,6 +26,7 @@ BIRMINGHAM = "Birmingham"
 NUNEATON = "Nuneaton"
 COVENTRY = "Coventry"
 REDDITCH = "Redditch"
+
 
 class LocationCard(Card):
     def __init__(self, name: CardName, isWild=False):
@@ -80,7 +81,7 @@ class LocationCard(Card):
             return prPurple(self.name)
         elif self.name == BEER1 or self.name == BEER2:
             return prLightGray(self.name)
-        return self.name
+        return self.name.value
 
     def __repr__(self) -> str:
         return str(self)

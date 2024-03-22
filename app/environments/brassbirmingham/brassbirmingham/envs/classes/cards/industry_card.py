@@ -14,12 +14,14 @@ class IndustryCard(Card):
 
     def __str__(self) -> str:
         if self.isWild:
-            return self.name
+            return self.name.value
         return prGreen(self.name)
 
     def __repr__(self) -> str:
-        return str(self)
-    
+        if self.isWild:
+            return self.name.value
+        return prGreen(self.name)
+
     def getBuildNames(self) -> List[BuildingName]:
         if self.name == CardName.man_goods_or_cotton:
             return [BuildingName.goods, BuildingName.cotton]
@@ -32,4 +34,11 @@ class IndustryCard(Card):
         elif self.name == CardName.pottery:
             return [BuildingName.pottery]
         else:
-            return [BuildingName.pottery, BuildingName.beer, BuildingName.goods, BuildingName.cotton, BuildingName.iron, BuildingName.coal]
+            return [
+                BuildingName.pottery,
+                BuildingName.beer,
+                BuildingName.goods,
+                BuildingName.cotton,
+                BuildingName.iron,
+                BuildingName.coal,
+            ]

@@ -22,18 +22,19 @@ class Merchant:
         self.hasBeer = True if self.name != MerchantName.blank else False
         self.tradePost = None
 
-
     def canSellHere(self, buildingName: BuildingName):
         answer = self.name.value == buildingName.value or self.name == MerchantName.all
         return answer
+
     def consumeBeer(self):
         self.hasBeer = False
-    
+
     def __str__(self) -> str:
         return f"Merchant({prLightPurple(self.name)})"
 
     def __repr__(self) -> str:
         return str(self)
+
 
 class TradePost:
     """
@@ -66,18 +67,18 @@ class TradePost:
         self.moneyGained = moneyGained
         self.victoryPointsGained = victoryPointsGained
         self.incomeGained = incomeGained
-        self.merchantTiles: List[Merchant] = [] # merchant tiles and beer at each slot
+        self.merchantTiles: List[Merchant] = []  # merchant tiles and beer at each slot
         self.networkPoints = networkPoints
         self.canDevelop = canDevelop
         self.networks: List[RoadLocation] = []
         self.supportedBuildings: Set[BuildingName] = set()
 
     # get Available canals to build
-    def getAvailableCanals(self)  -> List[RoadLocation]:
+    def getAvailableCanals(self) -> List[RoadLocation]:
         return [rLocation for rLocation in self.networks if rLocation.isBuilt == False]
-        
+
     # get Available railroads to build
-    def getAvailableRailroads(self)  -> List[RoadLocation]:
+    def getAvailableRailroads(self) -> List[RoadLocation]:
         return [rLocation for rLocation in self.networks if rLocation.isBuilt == False]
 
     """
@@ -90,24 +91,22 @@ class TradePost:
 
     def addMerchantTile(self, merchant: Merchant):
 
-
         self.merchantTiles.append(merchant)
         merchant.tradePost = self
 
         if merchant.name == MerchantName.all:
-            self.supportedBuildings.update([BuildingName.goods, BuildingName.pottery, BuildingName.cotton])
+            self.supportedBuildings.update(
+                [BuildingName.goods, BuildingName.pottery, BuildingName.cotton]
+            )
         elif merchant.name == MerchantName.goods:
             self.supportedBuildings.add(BuildingName.goods)
         elif merchant.name == MerchantName.pottery:
             self.supportedBuildings.add(BuildingName.pottery)
-
-
+        elif merchant.name == MerchantName.cotton:
+            self.supportedBuildings.add(BuildingName.cotton)
 
     def canSellHere(self, buildingName: BuildingName):
         return buildingName in self.supportedBuildings
-
-
-
 
     """
     addRoadLocation
