@@ -752,6 +752,228 @@ class Test(unittest.TestCase):
             "Should have iron building available after scouting",
         )
 
+    def testOverbuilding(self):
+        self.resetGame(2)
+
+        birm: Town = self.board.townDict[BIRMINGHAM]
+        b_to_ox = birm.networks[4]
+        birm_cotton_bl = birm.buildLocations[0]
+
+        # SetupCards for building
+        self.p1.hand.cards = [LocationCard(name=BIRMINGHAM)]
+
+        self.p1.money = 100
+        self.p2.money = 100
+
+        # Build cotton one in birm
+        self.p1.buildBuilding(
+            BuildingName.cotton, birm_cotton_bl, self.p1.hand.cards[0]
+        )
+
+        self.p2.hand.cards = [
+            LocationCard(name=BIRMINGHAM),
+            LocationCard(name=BIRMINGHAM),
+            LocationCard(name=BIRMINGHAM),
+            LocationCard(name=BIRMINGHAM),
+            LocationCard(name=BIRMINGHAM),
+            LocationCard(name=BIRMINGHAM),
+        ]
+
+        availableBuilds, firstBuildings, buildLocations = self.p2.getAvailableBuilds()
+
+        self.assertNotIn(
+            birm_cotton_bl, buildLocations, "Should not be able to overbuild cotton"
+        )
+
+        # Develop to Cotton Level 2
+        self.p2.developTwoIndustries(
+            self.p2.industryMat[BuildingName.cotton][-1],
+            self.p2.industryMat[BuildingName.cotton][-2],
+            self.p2.hand.cards[0],
+        )
+
+        self.p2.developOneIndustry(
+            self.p2.industryMat[BuildingName.cotton][-1], self.p2.hand.cards[0]
+        )
+
+        availableBuilds, firstBuildings, buildLocations = self.p2.getAvailableBuilds()
+
+        self.assertNotIn(
+            birm_cotton_bl,
+            buildLocations,
+            "Should not be able to overbuild cotton after developing",
+        )
+
+        # Should not be able to overbuild cotton
+
+        self.assertFalse(
+            self.p2.canOverbuild(
+                birm_cotton_bl.building, self.p2.industryMat[BuildingName.cotton][-1]
+            ),
+            "Should not be able to overbuild other players cotton",
+        )
+
+        # Build Canal to OX
+        self.p2.buildCanal(b_to_ox, self.p2.hand.cards[0])
+
+        availableBuilds, firstBuildings, buildLocations = self.p2.getAvailableBuilds()
+
+        self.assertNotIn(
+            birm_cotton_bl,
+            buildLocations,
+            "Should not be able to overbuild cotton after canal",
+        )
+
+        # Scout
+
+        self.p2.scout(
+            self.p2.hand.cards[0], self.p2.hand.cards[1], self.p2.hand.cards[2]
+        )
+
+        availableBuilds, firstBuildings, buildLocations = self.p2.getAvailableBuilds()
+
+        self.assertNotIn(
+            birm_cotton_bl,
+            buildLocations,
+            "Should not be able to overbuild cotton after scout",
+        )
+
+    def testSecondPhase(self):
+        self.resetGame(2)
+
+        self.p1.spentThisTurn = 200
+        self.p2.spentThisTurn = 100
+
+        # test building developing three times and bulidng a Cotton mill 2 in birmingham
+
+        ox: TradePost = self.board.tradePostDict[OXFORD]
+        ox.merchantTiles = []
+        ox.supportedBuildings = set()
+
+        cottonMerch = Merchant(name=MerchantName.cotton)
+
+        ox.addMerchantTile(cottonMerch)
+        ox.addMerchantTile(Merchant(name=MerchantName.goods))
+
+        self.p1.hand.cards = [
+            LocationCard(name=BIRMINGHAM),
+            LocationCard(name=BIRMINGHAM),
+            LocationCard(name=BIRMINGHAM),
+        ]
+
+        # Player 1:  Develop to Cotton Level 2
+        self.p1.developTwoIndustries(
+            self.p1.industryMat[BuildingName.cotton][-1],
+            self.p1.industryMat[BuildingName.cotton][-2],
+            self.p1.hand.cards[0],
+        )
+        self.p1.developTwoIndustries(
+            self.p1.industryMat[BuildingName.cotton][-1],
+            self.p1.industryMat[BuildingName.cotton][-2],
+            self.p1.hand.cards[0],
+        )
+
+        birmingham = self.board.townDict[BIRMINGHAM]
+        birm_cotton_bl = birmingham.buildLocations[0]
+
+        # Player 2: Build Canal
+        b_to_ox = birmingham.networks[4]
+
+        self.p2.buildCanal(b_to_ox, self.p2.hand.cards[0])
+
+        # Player 1: Build Cotton level 2
+
+        cottonBuilding: MarketBuilding = self.p1.industryMat[BuildingName.cotton][-1]
+        self.assertTrue(
+            self.p1.canUseCardForBuilding(
+                building=cottonBuilding,
+                buildLocation=birm_cotton_bl,
+                card=self.p1.hand.cards[0],
+            ),
+            "Should be able to build in birmingham with card",
+        )
+
+        oxford: TradePost = self.board.tradePostDict[OXFORD]
+        self.p1.hand.cards = [
+            LocationCard(name=BIRMINGHAM),
+            LocationCard(name=BIRMINGHAM),
+            LocationCard(name=BIRMINGHAM),
+        ]
+
+        self.p1.buildBuilding(
+            industryName=BuildingName.cotton,
+            buildLocation=birm_cotton_bl,
+            card=self.p1.hand.cards[0],
+            coalSources=[oxford],
+        )
+
+        # Player 1: Sell Cotton
+        self.p1.sell(
+            self.p1.hand.cards[0],
+            [(cottonBuilding, [cottonMerch], cottonMerch)],
+            [],
+        )
+
+        # Player 2: Develop to Coal Level 2
+        self.p2.hand.cards = [LocationCard(name=DUDLEY), LocationCard(name=DUDLEY)]
+        self.p2.developOneIndustry(
+            building=self.p2.industryMat[BuildingName.coal][-1],
+            discard=self.p2.hand.cards[0],
+        )
+
+        # Player 2: Build Coal level 2 in Dudley
+        dudley = self.board.townDict[DUDLEY]
+        dudley_coal_bl = dudley.buildLocations[0]
+        coalBuilding: IndustryBuilding = self.p2.industryMat[BuildingName.coal][-1]
+        self.p2.buildBuilding(BuildingName.coal, dudley_coal_bl, self.p2.hand.cards[0])
+
+        # Second Phase
+        self.board.deck.cards = []
+        self.p1.hand.cards = []
+        self.p2.hand.cards = []
+        self.board.endCanalEra()
+
+        self.assertEqual(self.board.era, Era.railroad, "Should be in railroad era")
+        self.assertTrue(
+            coalBuilding.isRetired == False
+            and coalBuilding.isActive == True
+            and coalBuilding.resourceAmount > 0,
+            "Should have coal Building present",
+        )
+        self.assertTrue(
+            cottonBuilding.isRetired == False and cottonBuilding.isActive == True,
+            "Should have cotton building present",
+        )
+
+        self.assertTrue(
+            cottonBuilding.buildLocation is not None
+            and cottonBuilding.buildLocation == birm_cotton_bl,
+            "BuildLocation link should be there for cotton",
+        )
+        self.assertTrue(
+            coalBuilding.buildLocation is not None
+            and coalBuilding.buildLocation == dudley_coal_bl,
+            "BuildLocation link should be there for cotton",
+        )
+
+        # availableNetworks = self.p1.getAvailableNetworks()
+
+        # print("Current towns for player 1", self.p1.currentTowns)
+        # print("Current buildings for player 1", self.p1.currentBuildings)
+        # print("Available Networks for player 1", availableNetworks)
+
+        availableRoads = self.p1.getAvailableRailroads()
+
+        for network in availableRoads:
+            print(network)
+
+        # print("Railroads available for player 1", availableRoads)
+        self.assertTrue(
+            len(availableRoads) > 0, "Should have available railroads for player 1"
+        )
+
+        render(self.board)
+
     def testIndustryMat(self):
         self.resetGame(2)
 

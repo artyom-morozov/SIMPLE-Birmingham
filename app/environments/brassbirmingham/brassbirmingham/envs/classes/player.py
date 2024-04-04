@@ -234,20 +234,20 @@ class Player:
             # Verify if tradepost has beer
             if isinstance(town, TradePost):
                 connectedToMine = True
-                continue
 
             # verify each town for coal
-            for bl in town.buildLocations:
-                if (
-                    bl.building
-                    and isinstance(bl.building, IndustryBuilding)
-                    and bl.building.type == BuildingType.industry
-                    and bl.building.name == BuildingName.coal
-                ):
-                    coalAvailable += bl.building.resourceAmount
+            if isinstance(town, Town):
+                for bl in town.buildLocations:
+                    if (
+                        bl.building
+                        and isinstance(bl.building, IndustryBuilding)
+                        and bl.building.type == BuildingType.industry
+                        and bl.building.name == BuildingName.coal
+                    ):
+                        coalAvailable += bl.building.resourceAmount
 
-                if coalAvailable >= coalNeeded:
-                    return self.money >= (building.cost + ironCost + 0)
+                    if coalAvailable >= coalNeeded:
+                        return self.money >= (building.cost + ironCost + 0)
 
             # get town neighbors, add to q
             for roadLocation in town.networks:
@@ -388,25 +388,23 @@ class Player:
         if newBuilding.tier <= oldBuilding.tier:
             return False
 
-        if oldBuilding.owner.id != newBuilding.owner.id:
-            isFlippedIndustry = (
-                isinstance(oldBuilding, IndustryBuilding)
-                and isinstance(newBuilding, IndustryBuilding)
-                and oldBuilding.isFlipped
-            )
+        if oldBuilding.name != newBuilding.name:
+            return False
 
+        if oldBuilding.owner.id != newBuilding.owner.id:
             if newBuilding.name == BuildingName.iron:
                 return (
-                    isFlippedIndustry
+                    oldBuilding.isFlipped
                     and len(self.board.getIronBuildings()) == 0
                     and self.board.ironMarketRemaining == 0
                 )
             if newBuilding.name == BuildingName.coal:
                 return (
-                    isFlippedIndustry
+                    oldBuilding.isFlipped
                     and len(self.board.getCoalBuildings()) == 0
                     and self.board.ironMarketRemaining == 0
                 )
+            return False
         return True
 
     # 1 BUILD
@@ -635,18 +633,17 @@ class Player:
                                 beers.add(merchant)
                             merchants.add(merchant)
 
-                continue
-
             # verify each town for beer
-            for bl in town.buildLocations:
-                if (
-                    bl.building
-                    and isinstance(bl.building, IndustryBuilding)
-                    and bl.building.isBeerBuilding()
-                    and not bl.building in beers
-                ):
-                    beers.add(bl.building)
-                    beerFromBreweries += bl.building.resourceAmount
+            if isinstance(town, Town):
+                for bl in town.buildLocations:
+                    if (
+                        bl.building
+                        and isinstance(bl.building, IndustryBuilding)
+                        and bl.building.isBeerBuilding()
+                        and not bl.building in beers
+                    ):
+                        beers.add(bl.building)
+                        beerFromBreweries += bl.building.resourceAmount
 
             # get town neighbors, add to q
             for roadLocation in town.networks:
@@ -670,9 +667,12 @@ class Player:
         potenitalRoads: Set[RoadLocation] = self.getAvailableNetworks()
         potentialRailRoads: Set[RoadLocation] = set()
 
+
         townsConnectedToCoal, townsConnectedToMarket = (
             self.board.getTownsConnectedToCoal(firstCoalSource)
         )
+        
+        print('Towns connected to coal', townsConnectedToCoal)
 
         ownBeerSources: Set[IndustryBuilding] = self.getOwnBeerSources()
 
@@ -696,6 +696,7 @@ class Player:
 
     # Get a list off all available road locations where a road could be build
     def getAvailableNetworks(self) -> Set[RoadLocation]:
+        # print("Getting available networks...")
 
         isRailEra = self.board.era == Era.railroad
 
@@ -723,12 +724,16 @@ class Player:
 
             return potentialRoads
 
+        # print("Current Towns", self.currentTowns)
         for t in self.currentTowns:
             # Get all available roadLocations from each town in the network
             availableBuildingRoads: List[RoadLocation] = (
                 t.getAvailableRailroads() if isRailEra else t.getAvailableCanals()
             )
+            # print(f"Available Networks from this {t}", availableBuildingRoads)
+
             potentialRoads.update(availableBuildingRoads)
+        # print("Potential Roads", potentialRoads)
 
         # Get connected roads
         for network in self.currentNetworks:

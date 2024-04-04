@@ -243,15 +243,18 @@ class Display:
         else:
             self.env = env
             self.game: GameModule = game
+
         self.interactive = interactive
         self.debug_mode = debug_mode
 
+        print("DDebug mOde", debug_mode)
         self.policies = policies
 
-        if self.debug_mode:
-            screen_width, screen_height = 2200, 1100
-        else:
-            screen_width, screen_height = 1735, 1300
+        # if self.debug_mode:
+        #     screen_width, screen_height = 2200, 1100
+        # else:
+        # screen_width, screen_height = 1735, 1300
+        screen_width, screen_height = 1735, 1300
 
         pygame.init()
         pygame.font.init()
@@ -726,6 +729,34 @@ class Display:
         # for action, (x, y) in ACTIONS.items():
         #         pygame.draw.circle(self.screen, TAN, (x, y), 30)
 
+        if self.debug_mode and self.game_state == GameState.PASS_CHOICE:
+            # add end Era button
+            button_width, button_height = 100, 50
+            end_era_button_x, end_era_button_y = 1339, 1096
+
+            pygame.draw.rect(
+                self.screen,
+                (255, 255, 255),
+                (end_era_button_x, end_era_button_y, button_width, button_height),
+            )
+            end_era_text = self.font.render("End Era", True, (0, 0, 0))
+            self.screen.blit(
+                end_era_text, (end_era_button_x + 10, end_era_button_y + 10)
+            )
+
+            if mouse_click:
+                if (
+                    end_era_button_x <= mouse_pos[0] <= end_era_button_x + button_width
+                    and end_era_button_y
+                    <= mouse_pos[1]
+                    <= end_era_button_y + button_height
+                ):
+                    print("End Era button clicked")
+                    self.game_state = GameState.NO_SELECTION
+                    self.reset_action()
+                    self.handle_action(action="END_ERA")
+                    return
+
         # Check if there was a mouse click and if it was within the bounds of the action menu
         if mouse_click:
             # print(f"Pos ", mouse_pos)
@@ -734,6 +765,7 @@ class Display:
                 if dist <= 30:  # Assuming the action buttons have a radius of 68 pixels
                     self.handle_action(action=action)
                     break  # Stop checking after the first match to avoid multiple actions being triggered
+
         # If the game state is DEVELOP2_CHOICE, render the confirm and cancel buttons
         if self.game_state != GameState.NO_SELECTION:
             # Define the button dimensions and positions
@@ -1067,7 +1099,7 @@ class Display:
         print(
             f"Current action {self.current_action}. Current game state {self.game_state}."
         )
-        if not self.game_state == GameState.NO_SELECTION:
+        if not self.game_state == GameState.NO_SELECTION and action != "END_ERA":
             return
 
         if action == "BUILD":
@@ -1079,11 +1111,21 @@ class Display:
                 "type": ActionTypes.BuildIndustry,
             }
         elif action == "ROAD":
+            self.availableRoads = (
+                self.active_player.getAvailableNetworks()
+                if self.game.board.era == Era.canal
+                else self.active_player.getAvailableRailroads()
+            )
+
             if len(self.availableRoads) == 0 or (
-                self.game.board.era == Era.canal
-                and not self.active_player.canAffordCanal()
-                or self.game.board.era == Era.railroad
-                and not self.active_player.canAffordOneRailroad()
+                (
+                    self.game.board.era == Era.canal
+                    and not self.active_player.canAffordCanal()
+                )
+                or (
+                    self.game.board.era == Era.railroad
+                    and not self.active_player.canAffordOneRailroad()
+                )
             ):
                 print("Cant build any roads")
                 return
@@ -1139,6 +1181,14 @@ class Display:
                 "type": ActionTypes.Pass,
             }
             self.game_state = GameState.CARD_CHOICE
+        elif action == "END_ERA":
+            print("doing end era")
+            for player in self.game.board.players:
+                player.hand.cards = []
+            self.game.board.deck.cards = []
+            self.game.board.endCanalEra()
+            self.game.turn = 0
+            self.reset_action()
 
     def apply_action(self):
         if not self.current_action:
@@ -1297,8 +1347,8 @@ class Display:
                         )
                     )
 
-                    print("Available coal buildings", availableCoalBuildings)
-                    print("Connected to market", connectedToMarket)
+                    # print("Available coal buildings", availableCoalBuildings)
+                    # print("Connected to market", connectedToMarket)
 
                     coalNeeded = self.current_action["building"].coalCost
 
@@ -1420,6 +1470,8 @@ class Display:
                     and not "industry2" in self.current_action
                 )
             ):
+                if not "ironSources" in self.current_action:
+                    self.current_action["ironSources"] = []
                 for building in [
                     self.active_player.industryMat[key][-1]
                     for key in self.active_player.industryMat.keys()
@@ -1591,8 +1643,8 @@ class Display:
                     self.game.board.getAvailableCoalForTown(road_location.towns[1])
                 )
 
-                availableCoalBuildings = availableCoalBuildings1.union(
-                    availableCoalBuildings2
+                availableCoalBuildings = set(availableCoalBuildings1).union(
+                    set(availableCoalBuildings2)
                 )
 
                 connectedToMarket = [connectedToMarket1, connectedToMarket2]

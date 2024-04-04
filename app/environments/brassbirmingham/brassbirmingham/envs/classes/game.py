@@ -209,8 +209,8 @@ class Game:
             action["type"] == ActionTypes.DevelopOneIndustry
             and "card" in action
             and "industry1" in action
-            and "ironSources" in action
         ):
+
             initialTier = action["industry1"].getTier()
             player.developOneIndustry(
                 action["industry1"],
@@ -227,8 +227,9 @@ class Game:
             and "card" in action
             and "industry1" in action
             and "industry2" in action
-            and "ironSources" in action
         ):
+            if not "ironSources" in action:
+                action["ironSources"] = []
             initialTiers = (
                 action["industry1"].getTier(),
                 action["industry2"].getTier(),

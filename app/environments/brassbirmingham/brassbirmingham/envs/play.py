@@ -9,10 +9,11 @@ device = "cpu"
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument('--policy1', type=str, default="human")
-    parser.add_argument('--policy2', type=str, default="human")
-    parser.add_argument('--policy3', type=str, default="none")
-    parser.add_argument('--policy4', type=str, default="none")
+    parser.add_argument("--policy1", type=str, default="human")
+    parser.add_argument("--policy2", type=str, default="human")
+    parser.add_argument("--policy3", type=str, default="none")
+    parser.add_argument("--policy4", type=str, default="none")
+    parser.add_argument("-d", "--debug", action="store_true", help="Enable debug mode")
     # parser.add_argument('--num-processes', type=int, default=1, help="number of processes for forward search policy.")
     # parser.add_argument('--max-init-actions', type=int, default=10, help="default maximum actions to be considered by forward search.")
     # parser.add_argument('--thinking-time', type=float, default=10, help="default thinking time (seconds) per decision for forward search policy.")
@@ -57,13 +58,22 @@ if __name__ == "__main__":
     #     max_trades = 0
     # env = EnvWrapper(policies=policies, max_proposed_trades_per_turn=max_trades)
     # env.reset()
+
     num_players = 2
 
-    if args.policy3 != 'none':
+    if args.policy3 != "none":
         num_players += 1
-    if args.policy4 != 'none':
+    if args.policy4 != "none":
         num_players += 1
 
-    game = Game(num_players=num_players, interactive=True)
+    game = Game(num_players=num_players, interactive=True, debug_mode=args.debug)
     policies = []
-    display = Display(env=None, game=game, interactive=True, policies=policies, test=False, debug_mode=False)
+
+    display = Display(
+        env=None,
+        game=game,
+        interactive=True,
+        policies=policies,
+        test=False,
+        debug_mode=args.debug,
+    )
