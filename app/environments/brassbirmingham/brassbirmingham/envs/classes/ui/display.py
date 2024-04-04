@@ -428,6 +428,71 @@ class Display:
             if player == self.game.get_active_player():
                 pygame.draw.rect(self.screen, PLAYER_COLOR_MAP[player.color], rect, 3)
 
+    def drawIndustry(
+        self,
+        building: Building,
+        x: int,
+        y: int,
+        size: int,
+        drawLevel: bool = False,
+        drawNum: bool = True,
+    ):
+        img = pygame.transform.scale(self.buildingImgs[building.name], (size, size))
+
+        rect_size = int(size * 1.25)
+        # Draw the square
+        img_rect = pygame.Rect(
+            x - rect_size // 2, y - rect_size // 2, rect_size, rect_size
+        )
+        pygame.draw.rect(self.screen, PLAYER_COLOR_MAP[building.owner.color], img_rect)
+
+        # lvl_text = self.font.render(f"{level}", True, BLACK)
+        # self.screen.blit(lvl_text, coords)
+
+        # Draw the building image
+        building_img = pygame.transform.scale(
+            self.buildingImgs[building.name], (size, size)
+        )
+        img_width, img_height = building_img.get_size()
+        img_x = x - img_width / 2
+        img_y = y - img_height / 2
+        self.screen.blit(building_img, (img_x, img_y))
+
+        left_text_pad = size * 0.4
+
+        to_render = building.getTier() if drawLevel else ""
+        text = self.font.render(f"{to_render}", True, BLACK)
+
+        self.screen.blit(text, (x - left_text_pad, y - left_text_pad))
+
+    def drawSelectedIndustries(self):
+        size = 50
+
+        ind1_x, ind1_y = 1249, 493
+        ind2_x, ind2_y = 1249 + size + 20, 493
+
+        if "industry1" in self.current_action:
+            ind1: IndustryBuilding = self.current_action["industry1"]
+            self.drawIndustry(
+                building=ind1,
+                x=ind1_x,
+                y=ind1_y,
+                size=size,
+                drawLevel=True,
+                drawNum=False,
+            )
+
+        if "industry2" in self.current_action:
+            ind2 = self.current_action["industry2"]
+            self.drawIndustry(
+                building=ind2,
+                x=ind2_x,
+                y=ind2_y,
+                size=size,
+                drawLevel=True,
+                drawNum=False,
+            )
+
     def draw_player_industry_mat(self, mouse_click, mouse_pos):
         player: Player = self.game.get_active_player()
 
@@ -456,16 +521,27 @@ class Display:
         # start_y = 50  # Starting y position
         # square_size = 40  # Size of the square for each building
         # y_offset = 10  # Space between each building entry
+        currentBuildings = []
+
+        if "industry1" in self.current_action:
+            currentBuildings.append(self.current_action["industry1"].id)
+        if "industry2" in self.current_action:
+            currentBuildings.append(self.current_action["industry2"].id)
+        if "building" in self.current_action:
+            currentBuildings.append(self.current_action["building"].id)
 
         for industry_name, buildings in player.industryMat.items():
             num_buildings = 0
-
-            for i in range(len(buildings)):
-                building: Building = buildings[i]
+            local_buildings = [b for b in buildings if b.id not in currentBuildings]
+            for i in range(len(local_buildings)):
+                building: Building = local_buildings[i]
 
                 num_buildings += 1
 
-                if i < len(buildings) - 1 and buildings[i + 1].tier == building.tier:
+                if (
+                    i < len(local_buildings) - 1
+                    and local_buildings[i + 1].tier == building.tier
+                ):
                     continue
 
                 x, y = INDUSTRY_MAT_POSITIONS[building.name][str(building.tier)]
@@ -482,8 +558,8 @@ class Display:
                     self.buildingImgs[building.name], (30, 30)
                 )
                 img_width, img_height = building_img.get_size()
-                img_x = x - 15
-                img_y = y - 15
+                img_x = x - img_width // 2
+                img_y = y - img_height // 2
                 self.screen.blit(building_img, (img_x, img_y))
 
                 num_text = self.font.render(f"{num_buildings}", True, BLACK)
@@ -1249,6 +1325,7 @@ class Display:
         self.drawHand(mouse_click=mouse_click, mouse_pos=mouse_pos)
         self.drawActionMenu(mouse_click=mouse_click, mouse_pos=mouse_pos)
         self.draw_player_industry_mat(mouse_click=mouse_click, mouse_pos=mouse_pos)
+        self.drawSelectedIndustries()
         self.render_game_log()
         pygame.display.update()
 
@@ -1480,7 +1557,7 @@ class Display:
                 ]:
                     x, y = INDUSTRY_MAT_POSITIONS[building.name][str(building.tier)]
 
-                    # Draw the square
+                    # Draw selection square around industry mat
                     building_selection_rect = pygame.Rect(x - 25, y - 25, 50, 50)
                     pygame.draw.rect(self.screen, GREEN, building_selection_rect, 3, 1)
                     if mouse_click and building_selection_rect.collidepoint(

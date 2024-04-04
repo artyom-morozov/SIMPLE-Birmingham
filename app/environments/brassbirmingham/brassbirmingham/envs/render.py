@@ -292,8 +292,8 @@ class Render:
 				
 			startX = x
 
-			print(building)
-			print(building.resourcesType.name)
+			# print(building)
+			# print(building.resourcesType.name)
 			assert building.resourcesType.name == "iron"
 			for i in range(building.resourceAmount):
 				if i > 0 and i % 3 == 0:

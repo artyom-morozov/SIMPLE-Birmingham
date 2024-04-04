@@ -21,7 +21,7 @@ class BuildLocation:
 
     def __init__(self, possibleBuilds: List[BuildingName]):
         self.id = id()
-        self.possibleBuilds = possibleBuilds
+        self.possibleBuilds: List[BuildingName] = possibleBuilds
         self.building: Optional[Building] = None
 
     """

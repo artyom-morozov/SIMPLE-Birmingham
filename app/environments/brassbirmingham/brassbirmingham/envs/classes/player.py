@@ -275,7 +275,22 @@ class Player:
         if building.onlyPhaseTwo and self.board.era != Era.railroad:
             return False
 
-        return buildLocation.isPossibleBuild(building)
+        if building.name not in buildLocation.possibleBuilds:
+            return False
+
+        # check if an alternative building exists in town
+        if not buildLocation.building and len(buildLocation.possibleBuilds) > 1:
+            for other_bl in buildLocation.town.buildLocations:
+                if other_bl.id == buildLocation.id:
+                    continue
+                if (
+                    not other_bl.building
+                    and building.name in other_bl.possibleBuilds
+                    and len(other_bl.possibleBuilds) == 1
+                ):
+                    return False
+
+        return True
 
     def totalBuildingCost(
         self, building: Building, coalCost: int, ironCost: int
@@ -667,12 +682,11 @@ class Player:
         potenitalRoads: Set[RoadLocation] = self.getAvailableNetworks()
         potentialRailRoads: Set[RoadLocation] = set()
 
-
         townsConnectedToCoal, townsConnectedToMarket = (
             self.board.getTownsConnectedToCoal(firstCoalSource)
         )
-        
-        print('Towns connected to coal', townsConnectedToCoal)
+
+        print("Towns connected to coal", townsConnectedToCoal)
 
         ownBeerSources: Set[IndustryBuilding] = self.getOwnBeerSources()
 
