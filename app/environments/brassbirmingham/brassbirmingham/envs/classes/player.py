@@ -1069,11 +1069,16 @@ class Player:
     ):
         assert self.isCardInHand(discard)
         assert self.canDevelop(building)
-        if len(ironSources) > 0:
-            assert len(ironSources) == 1
+        assert len(ironSources) == 1
 
         ironNeeded = 1
-        if len(ironSources) > 0:
+        if ironSources[0] is None:
+            ironCost = self.board.priceForIron(ironNeeded)
+            self.pay(ironCost)
+            self.board.ironMarketRemaining = max(
+                self.board.ironMarketRemaining - ironNeeded, 0
+            )
+        else:
             ironBuilding = ironSources[0]
             assert (
                 ironBuilding.type == BuildingType.industry
@@ -1086,12 +1091,7 @@ class Player:
             )
             assert ironBuilding.resourceAmount >= ironNeeded
             ironBuilding.decreaseResourceAmount(ironNeeded)
-        else:
-            ironCost = self.board.priceForIron(ironNeeded)
-            self.pay(ironCost)
-            self.board.ironMarketRemaining = max(
-                self.board.ironMarketRemaining - ironNeeded, 0
-            )
+
         building.isRetired = True
         self.industryMat[building.name].pop(-1)
         self.hand.spendCard(discard)
@@ -1107,16 +1107,20 @@ class Player:
             ironCost = self.board.priceForIron(1)
             return self.money >= ironCost
 
-    def canAffordSecondDevelop(self):
+    def canAffordSecondDevelop(self, markedUsed: bool = False):
         freeIron = sum(
             [ironB.resourceAmount for ironB in self.board.getIronBuildings()]
         )
-        if freeIron >= 2:
+
+        if not markedUsed:
+            freeIron -= 1
+
+        if freeIron >= 1:
             return True
-        else:
-            ironNeeded = 2 - freeIron
-            ironCost = self.board.priceForIron(ironNeeded)
-            return self.money >= ironCost
+
+        ironNeeded = max(2 - freeIron, 0)
+        ironCost = self.board.priceForIron(ironNeeded)
+        return self.money >= ironCost
 
     def developTwoIndustries(
         self,
@@ -1127,35 +1131,11 @@ class Player:
     ):
         assert self.isCardInHand(discard)
         assert self.canDevelop(building1, building2)
-        if len(ironSources) > 0:
-            assert len(ironSources) <= 2
+        assert len(ironSources) == 2
 
         ironNeeded = 2
-
-        if len(ironSources) == 0:
-            ironCost = self.board.priceForIron(ironNeeded)
-            self.pay(ironCost)
-            self.board.ironMarketRemaining = max(
-                self.board.ironMarketRemaining - ironNeeded, 0
-            )
-
-        if len(ironSources) == 1:
-            ironBuilding = ironSources.pop()
-            assert (
-                ironBuilding.type == BuildingType.industry
-                and ironBuilding.name == BuildingName.iron
-            )
-            assert (
-                ironBuilding.isFlipped == False
-                and ironBuilding.isActive == True
-                and ironBuilding.isRetired == False
-            )
-            assert ironBuilding.resourceAmount >= 1
-            ironBuilding.decreaseResourceAmount(ironNeeded)
-            ironNeeded -= 1
-
-        if len(ironSources) == 2:
-            for ironBuilding in ironSources:
+        for ironBuilding in ironSources:
+            if ironBuilding is not None:
                 assert (
                     ironBuilding.type == BuildingType.industry
                     and ironBuilding.name == BuildingName.iron
@@ -1164,10 +1144,16 @@ class Player:
                     ironBuilding.isFlipped == False
                     and ironBuilding.isActive == True
                     and ironBuilding.isRetired == False
-                    and ironBuilding.resourceAmount >= 1
                 )
+                assert ironBuilding.resourceAmount >= 1
                 ironBuilding.decreaseResourceAmount(1)
-
+                ironNeeded -= 1
+        if ironNeeded > 0:
+            ironCost = self.board.priceForIron(ironNeeded)
+            self.pay(ironCost)
+            self.board.ironMarketRemaining = max(
+                self.board.ironMarketRemaining - ironNeeded, 0
+            )
         building1.isRetired = True
         building2.isRetired = True
         self.industryMat[building1.name].pop(-1)

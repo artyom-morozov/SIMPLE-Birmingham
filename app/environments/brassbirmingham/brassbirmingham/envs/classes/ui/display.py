@@ -759,6 +759,30 @@ class Display:
         self.screen.blit(building_img, (img_x, img_y))  # Adjust as needed
         self.screen.blit(lvl_text, (x + 17, y + 12))
 
+        if self.game_state == GameState.IRON_CHOICE and "type" in self.current_action and ( (
+                        self.current_action["type"] == ActionTypes.DevelopOneIndustry
+                        and len(self.current_action["ironSources"]) < 1
+                    )
+                    or (
+                        self.current_action["type"] == ActionTypes.DevelopTwoIndustries
+                        and len(self.current_action["ironSources"]) < 2
+                    )
+                ):
+            # Draw green selection rectangle around the building
+            selection_rect = pygame.draw.rect(self.screen, GREEN, img_rect, 3)
+            if self.mouse_click and selection_rect.collidepoint(self.mouse_pos):
+                self.current_action["ironSources"].append(buildLocation.building)
+                self.mouse_click = False
+                if self.current_action["type"] == ActionTypes.DevelopOneIndustry and self.active_player.canAffordSecondDevelop(
+                    True
+                ):
+                    self.current_action["type"] = ActionTypes.DevelopTwoIndustries
+                    self.game_state = GameState.DEVELOP2_CHOICE
+                else:
+                    self.game_state = GameState.END_ACTION
+
+
+
     def drawCoal(self):
         for i in range(self.game.board.coalMarketRemaining):
             x = 1000
@@ -882,10 +906,10 @@ class Display:
                 ):
                     print("Confirm button clicked")
 
-                    if self.game_state == GameState.DEVELOP2_CHOICE:
+                    if self.game_state == GameState.DEVELOP2_CHOICE and "industry1" in self.current_action and not "industry2" in self.current_action:
                         # The confirm button was clicked
                         self.current_action["type"] = ActionTypes.DevelopOneIndustry
-                        self.game_state = GameState.IRON_CHOICE
+                        self.apply_action()
                     elif (
                         self.game_state == GameState.SELL_CHOICE
                         and len(self.buildingsBeerPairs) > 0
@@ -917,12 +941,14 @@ class Display:
                     <= cancel_button_y + button_height
                 ):
                     print("Cancel button clicked")
-                    if self.game_state == GameState.DEVELOP2_CHOICE:
-                        # The cancel button was clicked
-                        del self.current_action["industry1"]
-                        self.current_action["type"] = ActionTypes.DevelopOneIndustry
-                        self.game_state = GameState.DEVELOP1_CHOICE
-                    elif (
+                    # if self.game_state == GameState.DEVELOP2_CHOICE:
+                    #     # The cancel button was clicked
+                    #     del self.current_action["industry1"]
+                    #     self.current_action["type"] = ActionTypes.DevelopOneIndustry
+                    #     self.game_state = GameState.DEVELOP1_CHOICE
+                    # el
+
+                    if (
                         self.game_state == GameState.SELL_CHOICE
                         and self.buildingsBeerPairs > 0
                     ):
@@ -1499,43 +1525,74 @@ class Display:
                 self.game_state == GameState.IRON_CHOICE
                 and "type" in self.current_action
                 and (
-                    self.current_action["type"] == ActionTypes.DevelopOneIndustry
-                    or self.current_action["type"] == ActionTypes.DevelopTwoIndustries
+                    (
+                        self.current_action["type"] == ActionTypes.DevelopOneIndustry
+                        and len(self.current_action["ironSources"]) < 1
+                    )
+                    or (
+                        self.current_action["type"] == ActionTypes.DevelopTwoIndustries
+                        and len(self.current_action["ironSources"]) < 2
+                    )
                 )
             ):
-                if (
-                    self.current_action["type"] == ActionTypes.DevelopOneIndustry
-                    and "industry1" in self.current_action
-                ):
-                    ironCost = 1
-                else:
-                    ironCost = 2
-                self.current_action["ironSources"] = []
-                ironBuildings = self.game.board.getIronBuildings()
-                if len(ironBuildings) == 0:
+                if not "ironSources" in self.current_action:
+                    self.current_action["ironSources"] = []
+                
+
+
+                ironBuildings = [ b for b in self.game.board.getIronBuildings() if b not in self.current_action["ironSources"] or (
+                        b in self.current_action["ironSources"]
+                        and b.resourceAmount > 1
+                    )
+                ]
+
+
+                totalFreeIron = sum(
+                    [
+                        b.resourceAmount
+                        for b in ironBuildings
+                    ]
+                )
+                
+                if len([b for b in self.current_action["ironSources"] if not b is None]) > 0:
+                    totalFreeIron -= 1
+
+
+
+
+                if totalFreeIron == 0:
                     print(
                         "No iron buildings available. Paying price and applying action"
                     )
-                    self.game_state = GameState.END_ACTION
-                elif len(ironBuildings) == 1:
-                    self.current_action["ironSources"].append(ironBuildings[0])
-                    self.game_state = GameState.END_ACTION
+                    self.current_action["ironSources"].append(None)
+                    if self.current_action[
+                        "type"
+                    ] == ActionTypes.DevelopOneIndustry and self.active_player.canAffordSecondDevelop(
+                        True
+                    ):
+                        self.current_action["type"] = ActionTypes.DevelopTwoIndustries
+                        self.game_state = GameState.DEVELOP2_CHOICE
+                    else:
+                        self.game_state = GameState.END_ACTION
                 else:
-                    for ironBuilding in ironBuildings:
-                        x, y = self.buildLocationCoords[ironBuilding.buildLocation.id]
-
-                        building_selection_rect = pygame.Rect(x - 25, y - 25, 50, 50)
-                        pygame.draw.rect(
-                            self.screen, GREEN, building_selection_rect, 3, 1
-                        )
-                        if mouse_click and building_selection_rect.collidepoint(
-                            mouse_pos[0], mouse_pos[1]
+                    print(f"Total free iron {totalFreeIron} available Iron Buildings {ironBuildings}")
+                    # Draw Iron Market
+                    x, y = 1058, 435
+                    iron_market_rect = pygame.Rect(x - 24, y - 20, 102, 350)
+                    pygame.draw.rect(self.screen, GREEN, iron_market_rect, 3)
+                    if mouse_click and iron_market_rect.collidepoint(
+                        mouse_pos[0], mouse_pos[1]
+                    ):
+                        self.current_action["ironSources"].append(None)
+                        if self.current_action[
+                            "type"
+                        ] == ActionTypes.DevelopOneIndustry and self.active_player.canAffordSecondDevelop(
+                            True
                         ):
-                            self.current_action["ironSources"].append(ironBuilding)
-                            ironCost -= ironBuilding.resourceAmount
-                            if totalIron <= 0:
-                                self.game_state = GameState.END_ACTION
-                                break
+                            self.current_action["type"] = ActionTypes.DevelopTwoIndustries
+                            self.game_state = GameState.DEVELOP2_CHOICE
+                        else:
+                            self.game_state = GameState.END_ACTION
 
             elif "card" in self.current_action and (
                 (
@@ -1549,6 +1606,8 @@ class Display:
             ):
                 if not "ironSources" in self.current_action:
                     self.current_action["ironSources"] = []
+
+                
                 for building in [
                     self.active_player.industryMat[key][-1]
                     for key in self.active_player.industryMat.keys()
@@ -1565,17 +1624,10 @@ class Display:
                     ):
                         if self.game_state == GameState.DEVELOP1_CHOICE:
                             self.current_action["industry1"] = building
-
-                            if self.active_player.canAffordSecondDevelop():
-                                self.game_state = GameState.DEVELOP2_CHOICE
-                            else:
-                                self.game_state = GameState.END_ACTION
                         else:
-                            self.current_action["type"] = (
-                                ActionTypes.DevelopTwoIndustries
-                            )
                             self.current_action["industry2"] = building
-                            self.game_state = GameState.IRON_CHOICE
+                        self.game_state = GameState.IRON_CHOICE
+                        break
             elif (
                 "card" in self.current_action
                 and self.current_action["type"] == ActionTypes.Loan
