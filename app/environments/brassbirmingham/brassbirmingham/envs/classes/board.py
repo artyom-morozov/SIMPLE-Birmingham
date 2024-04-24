@@ -34,7 +34,7 @@ from .buildings.enums import BuildingName, BuildingType
 from .buildings.industry_building import IndustryBuilding
 from .buildings.market_building import MarketBuilding
 from .deck import Deck
-from .enums import Era
+from .enums import Era, PlayerId
 from .hand import Hand
 from .road_location import RoadLocation
 from .roads.canal import Canal
@@ -69,14 +69,12 @@ class Board:
         self.players: List[Player] = []  # array of Player objects
         self.id_to_player: Dict[str, Player] = {}
 
-        self.wildIndustryCards = [
-            IndustryCard(name=CardName.wild_industry),
-            IndustryCard(name=CardName.wild_industry),
-        ]
-        self.wildlocationCards = [
-            LocationCard(name=CardName.wild_location),
-            LocationCard(name=CardName.wild_location),
-        ]
+        self.wildIndustryCards: List[IndustryCard] = []
+        self.wildlocationCards: List[LocationCard] = []
+
+        for i in range(numPlayers):
+            self.wildIndustryCards.append(IndustryCard(name=CardName.wild_industry))
+            self.wildlocationCards.append(LocationCard(name=CardName.wild_location))
 
         for town in self.towns:
             town.addBoard(self)  # ref board to towns
@@ -840,7 +838,7 @@ class Board:
             self.consumeBeer(building, beerSource=beerSources[1])
             building.sell()
 
-    def getVictoryPoints(self) -> Dict[Player, int]:
+    def getVictoryPoints(self) -> Dict[PlayerId, int]:
         points = defaultdict(int)
 
         for building in self.getAllBuildings():
@@ -879,7 +877,10 @@ class Board:
         assert len(self.deck.cards) == 0
         for player in self.players:
             assert len(player.hand.cards) == 0
+
+        # Calculate player points
         # Nothing to do
+        return self.getVictoryPoints()
 
     def endCanalEra(self):
         assert len(self.deck.cards) == 0
@@ -887,17 +888,19 @@ class Board:
             assert len(player.hand.cards) == 0
 
         # Calculate player points
-        self.playerPoints = self.getVictoryPoints()
+        self.playerPoints = {}
 
         # Shuffle draw deck
         self.deck = Deck(copy.deepcopy(STARTING_CARDS[str(self.numPlayers)]))
+
         # Set points to each player
         # Draw new hand
         for player_id, points in self.playerPoints.items():
             player = self.id_to_player[player_id]
-            player.victoryPoints = points
+            player.victoryPoints = player.countCurrentPoints()
             player.roadCount = STARTING_ROADS
             player.hand = Hand(self.deck.draw(STARTING_HAND_SIZE))
+            self.playerPoints[player_id] = player.victoryPoints
 
         # Remove links
         for roadLocation in self.roadLocations:

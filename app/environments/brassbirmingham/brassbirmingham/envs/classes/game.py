@@ -1,4 +1,4 @@
-from typing import List, Tuple
+from typing import List, Tuple, Dict
 import numpy as np
 import random
 import copy
@@ -29,8 +29,13 @@ class Game:
         self.debug_mode = debug_mode
         self.policies = policies
         self.players_go_index = 0
-        self.winner = 0
+        self.winner = None
         self.playerVPS = {}
+
+        self.canalWinner = None
+
+        for player in self.board.players:
+            self.playerVPS[player.id] = 0
 
         if interactive:
             self.display = self.initDisplay(interactive, debug_mode, policies)
@@ -54,7 +59,7 @@ class Game:
 
     def reset(self):
         self.board = Board(self.num_players)
-        self.players = {}
+        self.players: Dict[PlayerId, Player] = {}
         self.action_history = defaultdict(list)
         self.turn = 1
         for color in PLAYER_COLORS[: self.num_players]:
@@ -269,6 +274,24 @@ class Game:
                 self.start_new_turn()
         return action_log
 
+    def get_winner(self) -> Player:
+        # Get the maximum number of victory points
+        max_vps = max(self.playerVPS.values())
+
+        # Get the players with the maximum number of victory points
+        max_vps_players: List[Player] = [
+            self.players[player_id]
+            for player_id, vps in self.playerVPS.items()
+            if vps == max_vps
+        ]
+
+        if len(max_vps_players) == 1:
+            # If there is only one player with the maximum number of victory points, return that player
+            return max_vps_players[0]
+        else:
+            # If there are multiple players with the maximum number of victory points, return the player with the most money
+            return max(max_vps_players, key=lambda player: player.money)
+
     def start_new_turn(self):
         # check if end game/ era change
         if self.board.era == Era.canal and self.turn >= self.max_turns:
@@ -276,8 +299,11 @@ class Game:
             self.turn = 0
             return
         if self.board.era == Era.railroad and self.turn >= self.max_turns:
-            self.board.endRailEra()
-            self.turn = 0
+            newVps = self.board.endRailEra()
+            for player_id, player in self.players.items():
+                self.playerVPS[player_id] = player.countCurrentPoints()
+            self.game_over = True
+            self.winner = self.get_winner()
             return
 
         # determine spend order and reset

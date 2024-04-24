@@ -1096,6 +1096,21 @@ class Player:
         self.industryMat[building.name].pop(-1)
         self.hand.spendCard(discard)
 
+    def countCurrentPoints(self):
+        points = self.victoryPoints
+        for building in self.currentBuildings:
+            if building.isFlipped:
+                points += building.victoryPointsGained
+
+        for network in self.currentNetworks:
+            for town in network.towns:
+                if isinstance(town, Town):
+                    points += town.getNetworkVictoryPoints()
+                elif isinstance(town, TradePost):
+                    points += town.networkPoints
+
+        return points
+
     def canAffordOneDevelop(self):
         freeIron = sum(
             [ironB.resourceAmount for ironB in self.board.getIronBuildings()]

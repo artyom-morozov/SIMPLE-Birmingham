@@ -2,6 +2,8 @@ from collections import defaultdict
 import unittest
 from unittest.mock import MagicMock, Mock
 
+import numpy as np
+
 from classes.board import Board
 from classes.deck import Deck
 from classes.enums import Era
@@ -13,6 +15,8 @@ from render import render
 from functools import reduce
 import random
 import asyncio
+
+# from wrapper import EnvWrapper
 
 
 class Test(unittest.TestCase):
@@ -974,8 +978,80 @@ class Test(unittest.TestCase):
 
         render(self.board)
 
-    def testIndustryMat(self):
+    def testVectors(self):
         self.resetGame(2)
+
+        # count_bl = 0
+        # for t in self.board.towns:
+        #     if isinstance(t, Town):
+        #         count_bl += len(t.buildLocations)
+        # print("Just bls", count_bl)
+
+        # print("Goods", BuildingName.goods)
+        # print("First goods tier", self.p1.industryMat[BuildingName.goods][-1].tier)
+
+        # print("Create VP for building map")
+
+        money = set()
+        coalCost = set()
+        ironCost = set()
+        beerCost = set()
+        resoruces = set()
+        incomeGained = set()
+        networkPoints = set()
+
+        for b in BUILDINGS:
+            money.add(b.cost)
+            coalCost.add(b.coalCost)
+            ironCost.add(b.ironCost)
+            incomeGained.add(b.incomeGained)
+            if isinstance(b, MarketBuilding):
+                beerCost.add(b.beerCost)
+            elif isinstance(b, IndustryBuilding):
+                resoruces.add(b.resourceAmount)
+            networkPoints.add(b.networkPoints)
+
+        print(f"Unique money ({len(money)})", list(money))
+        print(f"Unique coalCost ({len(coalCost)})", list(coalCost))
+        print(f"Unique ironCost ({len(ironCost)})", list(ironCost))
+        print(f"Unique beerCost ({len(beerCost)})", list(beerCost))
+        print(f"Unique incomeGained ({len(incomeGained)})", list(incomeGained))
+        print(f"Unique resoruces ({len(resoruces)})", list(resoruces))
+        print(f"Unique networkPoints ({len(networkPoints)})", list(networkPoints))
+        # all_bls = []
+        # for t in self.board.towns:
+        #     if isinstance(t, Town):
+        #         for bl in t.buildLocations:
+        #             for possibleBuild in bl.possibleBuilds:
+        #                 all_bls.append((bl, possibleBuild))
+
+        # print("All Build Locations ", len(all_bls))
+
+        # print("First build Location", all_bls[0])
+
+        # all_coal = [
+        #     (bl, possibleBuild)
+        #     for bl, possibleBuild in all_bls
+        #     if possibleBuild == BuildingName.coal
+        # ]
+
+        # print("All Coal Sources", len(all_coal) + 1)
+
+        # all_iron = [
+        #     (bl, possibleBuild)
+        #     for bl, possibleBuild in all_bls
+        #     if possibleBuild == BuildingName.iron
+        # ]
+
+        # print("All Iron Sources", len(all_iron) + 1)
+
+        # env = EnvWrapper()
+
+        # self.assertEqual(
+        #     len(env._get_road_features()),
+        #     39,
+        #     "Should have no vector size for no players",
+        # )
 
         # self.p1.hand = [LocationCard()]
 
