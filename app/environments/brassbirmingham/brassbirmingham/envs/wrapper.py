@@ -12,10 +12,7 @@ from classes.cards.location_card import LocationCard
 from classes.game import Game
 from classes.enums import (
     ActionTypes,
-    DevelopmentCard,
     Era,
-    Resource,
-    BuildingType,
     PlayerId,
 )
 from classes.player import Player
@@ -110,11 +107,7 @@ class EnvWrapper(object):
 
     def step(self, action):
         translated_action = self._translate_action(action)
-        if self.validate_actions:
-            valid_action, error = self.game.validate_action(translated_action)
-            if valid_action == False:
-                raise RuntimeError(error)
-        message = self.game.apply_action(translated_action)
+        message = self.game.do_action(translated_action)
 
         obs = self._get_obs()
 
@@ -140,13 +133,13 @@ class EnvWrapper(object):
 
         obs["player_features"] = self._get_player_features(player)
 
-        obs["current_player_hand"] = self._get_player_hand(player)
+        obs["player_current_hand"] = self._get_player_hand(player)
 
-        obs["current_player_info"] = self._get_player_features(player)
+        obs["player_current_info"], obs[f"player_current_mat"] = self._get_player_features(player)
 
         for i, player_id in enumerate(self.game.playerVPS.keys()):
             if player_id != player.id:
-                obs[f"player_{i}_info"] = self._get_player_features(player)
+                obs[f"player_{i}_info"], obs[f"player_{i}_mat"] = self._get_player_features(player)
 
         return obs
 
@@ -321,7 +314,7 @@ class EnvWrapper(object):
                     # Is Flipped
                     is_flipped = (
                         1.0
-                        if not build_location.building is not None
+                        if not build_location.building is None
                         and build_location.building.isFlipped
                         else 0.0
                     )
@@ -341,6 +334,8 @@ class EnvWrapper(object):
         for building_name in BuildingName:
             for tier in range(1, N_LEVELS + 1):
                 key = (building_name, tier)
+                if not key in building_lookup:
+                    continue
                 building: Building = building_lookup[key]
 
                 # Money Cost will be one of [0, 5, 7, 8, 9, 10, 12, 14, 16, 17, 18, 20, 22, 24]
@@ -432,7 +427,7 @@ class EnvWrapper(object):
             industry_vector = np.concatenate((tier, count_vector))
             industry_mat.append(industry_vector)
 
-        return industry_mat
+        return np.array(industry_mat)
 
     def _get_available_industry(self, player: Player):
         available_industry = np.zeros((N_INDUSTRIES,))
@@ -447,11 +442,11 @@ class EnvWrapper(object):
         total_cards = len(starting_cards)
         all_cards_vector = np.zeros((total_cards,))
         for i, card in enumerate(starting_cards):
-            all_cards_vector[i] = 1.0 if card in player.hand else 0.0
+            all_cards_vector[i] = 1.0 if card in player.hand.cards else 0.0
 
         wild_cards = np.zeros((2,))
 
-        for card in player.hand:
+        for card in player.hand.cards:
             if not card.isWild:
                 continue
             if isinstance(card, IndustryCard):
@@ -487,14 +482,14 @@ class EnvWrapper(object):
     def _get_player_features(self, player: Player):
 
         # normalize value out with max being 250
-        potential_vps = self.game.playerVPS + player.countCurrentPoints() / 250.0
+        potential_vps = player.countCurrentPoints() / 250.0
 
         incomeLevel = player.incomeLevel() / 99.0
         money = player.money / 250.0
 
         turnOrder = np.zeros((self.game.num_players,))
         turnOrder[self.game.board.players.index(player)] = 1.0
-
+        
         industryMat = self._get_players_industry_mat(player)
 
         spentThisTurn = player.spentThisTurn / 250.0
@@ -505,16 +500,14 @@ class EnvWrapper(object):
             if card.id in [card.id for card in player.hand.discard]:
                 players_discard[i] = 1.0
 
+        
         return np.concatenate(
             (
-                industryMat,
-                [
-                    players_discard,
-                    potential_vps,
-                    incomeLevel,
-                    money,
-                    spentThisTurn,
-                    turnOrder,
-                ],
+                players_discard,
+                [potential_vps],
+                [incomeLevel],
+                [money],
+                [spentThisTurn],
+                turnOrder
             )
-        )
+        ), industryMat

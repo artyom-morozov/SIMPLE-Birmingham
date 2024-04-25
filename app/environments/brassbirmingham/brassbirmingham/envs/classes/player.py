@@ -686,7 +686,7 @@ class Player:
             self.board.getTownsConnectedToCoal(firstCoalSource)
         )
 
-        print("Towns connected to coal", townsConnectedToCoal)
+        # print("Towns connected to coal", townsConnectedToCoal)
 
         ownBeerSources: Set[IndustryBuilding] = self.getOwnBeerSources()
 

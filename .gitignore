@@ -5,7 +5,7 @@ archive
 # Documentatino notebooks since they're copied over when the build_docs script
 # is executed
 doc/notebooks/*
-
+app/environments/brassbirmingham/brassbirmingham/envs/local/
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]

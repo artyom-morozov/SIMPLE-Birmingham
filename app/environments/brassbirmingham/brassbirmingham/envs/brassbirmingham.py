@@ -1,11 +1,10 @@
 import random
 
-import config
 import gym
 import numpy as np
-from stable_baselines import logger
+# from stable_baselines import logger
 
-from .classes.board import Board
+from brassbirmingham.envs.classes.board import Board
 
 
 # TODO delete stuff and make stuff :)

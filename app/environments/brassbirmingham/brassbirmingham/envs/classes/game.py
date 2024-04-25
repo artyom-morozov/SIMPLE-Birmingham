@@ -299,7 +299,7 @@ class Game:
             self.turn = 0
             return
         if self.board.era == Era.railroad and self.turn >= self.max_turns:
-            newVps = self.board.endRailEra()
+            self.board.endRailEra()
             for player_id, player in self.players.items():
                 self.playerVPS[player_id] = player.countCurrentPoints()
             self.game_over = True

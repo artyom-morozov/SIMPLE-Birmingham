@@ -533,6 +533,7 @@ class Test(unittest.TestCase):
             self.p2.industryMat[BuildingName.beer][-1],
             self.p2.industryMat[BuildingName.beer][-2],
             discard=garbageCard2,
+            ironSources=[None, None]
         )
 
         # print('Last beer',  self.p2.industryMat[BuildingName.beer][-1])
@@ -794,10 +795,12 @@ class Test(unittest.TestCase):
             self.p2.industryMat[BuildingName.cotton][-1],
             self.p2.industryMat[BuildingName.cotton][-2],
             self.p2.hand.cards[0],
+            ironSources=[None, None]
         )
 
         self.p2.developOneIndustry(
-            self.p2.industryMat[BuildingName.cotton][-1], self.p2.hand.cards[0]
+            self.p2.industryMat[BuildingName.cotton][-1], self.p2.hand.cards[0], 
+            ironSources=[None]
         )
 
         availableBuilds, firstBuildings, buildLocations = self.p2.getAvailableBuilds()
@@ -870,11 +873,13 @@ class Test(unittest.TestCase):
             self.p1.industryMat[BuildingName.cotton][-1],
             self.p1.industryMat[BuildingName.cotton][-2],
             self.p1.hand.cards[0],
+            ironSources=[None, None]
         )
         self.p1.developTwoIndustries(
             self.p1.industryMat[BuildingName.cotton][-1],
             self.p1.industryMat[BuildingName.cotton][-2],
             self.p1.hand.cards[0],
+            ironSources=[None, None]
         )
 
         birmingham = self.board.townDict[BIRMINGHAM]
@@ -923,6 +928,7 @@ class Test(unittest.TestCase):
         self.p2.developOneIndustry(
             building=self.p2.industryMat[BuildingName.coal][-1],
             discard=self.p2.hand.cards[0],
+            ironSources=[None]
         )
 
         # Player 2: Build Coal level 2 in Dudley
@@ -976,11 +982,17 @@ class Test(unittest.TestCase):
             len(availableRoads) > 0, "Should have available railroads for player 1"
         )
 
-        render(self.board)
+        # render(self.board)
 
     def testVectors(self):
         self.resetGame(2)
 
+        from wrapper import EnvWrapper
+        env = EnvWrapper(interactive=False, debug_mode=True)
+
+        env.reset()
+        
+        print("Player Features", env._get_player_features(next(iter(env.game.players.values()))))
         # count_bl = 0
         # for t in self.board.towns:
         #     if isinstance(t, Town):
@@ -992,32 +1004,32 @@ class Test(unittest.TestCase):
 
         # print("Create VP for building map")
 
-        money = set()
-        coalCost = set()
-        ironCost = set()
-        beerCost = set()
-        resoruces = set()
-        incomeGained = set()
-        networkPoints = set()
+        # money = set()
+        # coalCost = set()
+        # ironCost = set()
+        # beerCost = set()
+        # resoruces = set()
+        # incomeGained = set()
+        # networkPoints = set()
 
-        for b in BUILDINGS:
-            money.add(b.cost)
-            coalCost.add(b.coalCost)
-            ironCost.add(b.ironCost)
-            incomeGained.add(b.incomeGained)
-            if isinstance(b, MarketBuilding):
-                beerCost.add(b.beerCost)
-            elif isinstance(b, IndustryBuilding):
-                resoruces.add(b.resourceAmount)
-            networkPoints.add(b.networkPoints)
+        # for b in BUILDINGS:
+        #     money.add(b.cost)
+        #     coalCost.add(b.coalCost)
+        #     ironCost.add(b.ironCost)
+        #     incomeGained.add(b.incomeGained)
+        #     if isinstance(b, MarketBuilding):
+        #         beerCost.add(b.beerCost)
+        #     elif isinstance(b, IndustryBuilding):
+        #         resoruces.add(b.resourceAmount)
+        #     networkPoints.add(b.networkPoints)
 
-        print(f"Unique money ({len(money)})", list(money))
-        print(f"Unique coalCost ({len(coalCost)})", list(coalCost))
-        print(f"Unique ironCost ({len(ironCost)})", list(ironCost))
-        print(f"Unique beerCost ({len(beerCost)})", list(beerCost))
-        print(f"Unique incomeGained ({len(incomeGained)})", list(incomeGained))
-        print(f"Unique resoruces ({len(resoruces)})", list(resoruces))
-        print(f"Unique networkPoints ({len(networkPoints)})", list(networkPoints))
+        # print(f"Unique money ({len(money)})", list(money))
+        # print(f"Unique coalCost ({len(coalCost)})", list(coalCost))
+        # print(f"Unique ironCost ({len(ironCost)})", list(ironCost))
+        # print(f"Unique beerCost ({len(beerCost)})", list(beerCost))
+        # print(f"Unique incomeGained ({len(incomeGained)})", list(incomeGained))
+        # print(f"Unique resoruces ({len(resoruces)})", list(resoruces))
+        # print(f"Unique networkPoints ({len(networkPoints)})", list(networkPoints))
         # all_bls = []
         # for t in self.board.towns:
         #     if isinstance(t, Town):
