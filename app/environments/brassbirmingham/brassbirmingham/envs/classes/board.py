@@ -3,7 +3,7 @@ from collections import defaultdict, deque
 
 import copy
 from typing import TYPE_CHECKING, Deque, Dict, List, Set, Tuple
-from numpy.random import shuffle
+import random
 from .cards.enums import CardName
 from .cards.industry_card import IndustryCard
 from .cards.location_card import LocationCard
@@ -47,11 +47,14 @@ if TYPE_CHECKING:
 
 
 class Board:
-    def __init__(self, numPlayers: int, test=False):
+    def __init__(self, numPlayers: int, test=False, seed=None):
         self.id = id()
         self.numPlayers = numPlayers
         self.era = Era.canal
-        self.deck = Deck(copy.deepcopy(STARTING_CARDS[str(numPlayers)]))
+        self.seed = seed
+        self.deck = Deck(
+            copy.deepcopy(STARTING_CARDS[str(numPlayers)]), np_shuffle=self.shuffle
+        )
         self.deck.discard(numPlayers)
 
         self.towns = copy.deepcopy(TOWNS)  # array of Town objects
@@ -98,12 +101,20 @@ class Board:
         # init merchant tiles
 
         mechantTileId = 0
+
         if not test:
-            shuffle(self.merchants)
+            self.shuffle(self.merchants)
+
         for tradePost in self.tradePosts:
             for beer in range(tradePost.beerAmount):
                 tradePost.addMerchantTile(self.merchants[mechantTileId])
                 mechantTileId += 1
+
+    def shuffle(self, l):
+        if self.seed:
+            print("Seeds:", self.seed)
+            random.seed(self.seed)
+        random.shuffle(l)
 
     """
     addPlayer
@@ -126,7 +137,7 @@ class Board:
     def orderPlayers(self, random=False):
 
         if random:
-            shuffle(self.players)
+            self.shuffle(self.players)
         else:
             self.players.sort(key=lambda p: p.spentThisTurn)
 
@@ -891,7 +902,9 @@ class Board:
         self.playerPoints = {}
 
         # Shuffle draw deck
-        self.deck = Deck(copy.deepcopy(STARTING_CARDS[str(self.numPlayers)]))
+        self.deck = Deck(
+            copy.deepcopy(STARTING_CARDS[str(self.numPlayers)]), np_shuffle=self.shuffle
+        )
 
         # Set points to each player
         # Draw new hand

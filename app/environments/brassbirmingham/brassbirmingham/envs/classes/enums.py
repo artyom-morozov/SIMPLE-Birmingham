@@ -48,6 +48,5 @@ class ActionTypes(IntEnum):
     Sell = 6
     Loan = 7
     Scout = 8
-    Discard = 9
-    Pass = 10
-    Liquidate = 11
+    Pass = 9
+    Liquidate = 10

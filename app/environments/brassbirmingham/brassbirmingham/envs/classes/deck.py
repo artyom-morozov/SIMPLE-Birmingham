@@ -1,7 +1,5 @@
 from collections import deque
-import random
 from typing import List
-
 from python.id import id
 
 from .cards.card import Card
@@ -14,14 +12,12 @@ class Deck:
     :param cards: array of Card objects
     """
 
-    def __init__(self, cards: List[Card]):
+    def __init__(self, cards: List[Card], np_shuffle):
         self.id = id()
+        self.shuffle = np_shuffle
+        self.shuffle(cards)
         self.cards = deque(cards)
         self.discardPile = []
-        self.shuffle()
-
-    def shuffle(self):
-        random.shuffle(self.cards)
 
     def __len__(self):
         return len(self.cards)
@@ -41,9 +37,9 @@ class Deck:
             discarded += 1
 
     def reset(self):
-        self.cards = self.discardPile
+        self.shuffle(self.discardPile)
+        self.cards = deque(self.discardPile)
         self.discardPile = []
-        self.shuffle()
 
     def __str__(self) -> str:
         return str(self.cards)

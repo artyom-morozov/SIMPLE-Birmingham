@@ -13,7 +13,6 @@ from classes.trade_post import Merchant
 from consts import *
 from render import render
 from functools import reduce
-import random
 import asyncio
 
 # from wrapper import EnvWrapper
@@ -39,7 +38,7 @@ class Test(unittest.TestCase):
 
     def testSelling(self):
         self.resetGame(2)
-
+        print("MAX_CARDS ", len(STARTING_CARDS["2"]))
         # print("Player 1", self.p1, " color - ", self.p1.color)
         # print("Player 2", self.p2, " color - ", self.p2.color)
 
@@ -533,7 +532,7 @@ class Test(unittest.TestCase):
             self.p2.industryMat[BuildingName.beer][-1],
             self.p2.industryMat[BuildingName.beer][-2],
             discard=garbageCard2,
-            ironSources=[None, None]
+            ironSources=[None, None],
         )
 
         # print('Last beer',  self.p2.industryMat[BuildingName.beer][-1])
@@ -795,12 +794,13 @@ class Test(unittest.TestCase):
             self.p2.industryMat[BuildingName.cotton][-1],
             self.p2.industryMat[BuildingName.cotton][-2],
             self.p2.hand.cards[0],
-            ironSources=[None, None]
+            ironSources=[None, None],
         )
 
         self.p2.developOneIndustry(
-            self.p2.industryMat[BuildingName.cotton][-1], self.p2.hand.cards[0], 
-            ironSources=[None]
+            self.p2.industryMat[BuildingName.cotton][-1],
+            self.p2.hand.cards[0],
+            ironSources=[None],
         )
 
         availableBuilds, firstBuildings, buildLocations = self.p2.getAvailableBuilds()
@@ -873,13 +873,13 @@ class Test(unittest.TestCase):
             self.p1.industryMat[BuildingName.cotton][-1],
             self.p1.industryMat[BuildingName.cotton][-2],
             self.p1.hand.cards[0],
-            ironSources=[None, None]
+            ironSources=[None, None],
         )
         self.p1.developTwoIndustries(
             self.p1.industryMat[BuildingName.cotton][-1],
             self.p1.industryMat[BuildingName.cotton][-2],
             self.p1.hand.cards[0],
-            ironSources=[None, None]
+            ironSources=[None, None],
         )
 
         birmingham = self.board.townDict[BIRMINGHAM]
@@ -928,7 +928,7 @@ class Test(unittest.TestCase):
         self.p2.developOneIndustry(
             building=self.p2.industryMat[BuildingName.coal][-1],
             discard=self.p2.hand.cards[0],
-            ironSources=[None]
+            ironSources=[None],
         )
 
         # Player 2: Build Coal level 2 in Dudley
@@ -988,11 +988,15 @@ class Test(unittest.TestCase):
         self.resetGame(2)
 
         from wrapper import EnvWrapper
+
         env = EnvWrapper(interactive=False, debug_mode=True)
 
         env.reset()
-        
-        print("Player Features", env._get_player_features(next(iter(env.game.players.values()))))
+
+        print(
+            "Player Features",
+            env._get_player_features(next(iter(env.game.players.values()))),
+        )
         # count_bl = 0
         # for t in self.board.towns:
         #     if isinstance(t, Town):
@@ -1030,24 +1034,26 @@ class Test(unittest.TestCase):
         # print(f"Unique incomeGained ({len(incomeGained)})", list(incomeGained))
         # print(f"Unique resoruces ({len(resoruces)})", list(resoruces))
         # print(f"Unique networkPoints ({len(networkPoints)})", list(networkPoints))
-        # all_bls = []
-        # for t in self.board.towns:
-        #     if isinstance(t, Town):
-        #         for bl in t.buildLocations:
-        #             for possibleBuild in bl.possibleBuilds:
-        #                 all_bls.append((bl, possibleBuild))
+        all_bls = []
+        for t in self.board.towns:
+            if isinstance(t, Town):
+                for bl in t.buildLocations:
+                    for possibleBuild in bl.possibleBuilds:
+                        all_bls.append((bl, possibleBuild))
 
-        # print("All Build Locations ", len(all_bls))
+        print("All Build Locations ", len(all_bls))
 
-        # print("First build Location", all_bls[0])
+        print("First build Location", all_bls[0])
 
-        # all_coal = [
-        #     (bl, possibleBuild)
-        #     for bl, possibleBuild in all_bls
-        #     if possibleBuild == BuildingName.coal
-        # ]
+        all_coal = [
+            (bl, possibleBuild)
+            for bl, possibleBuild in all_bls
+            if possibleBuild == BuildingName.goods
+            or possibleBuild == BuildingName.cotton
+            or possibleBuild == BuildingName.pottery
+        ]
 
-        # print("All Coal Sources", len(all_coal) + 1)
+        print("All Beer Sources", len(all_coal))
 
         # all_iron = [
         #     (bl, possibleBuild)
