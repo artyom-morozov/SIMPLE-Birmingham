@@ -21,7 +21,6 @@ class Game:
     def __init__(
         self, num_players=2, interactive=False, debug_mode=False, policies=None
     ):
-
         self.num_players = num_players
         self.max_turns = ROUNDS_PER_PLAYER_NUM[str(num_players)]
         self.reset()
@@ -157,9 +156,9 @@ class Game:
             player.buildOneRailroad(
                 action["card"], action["road1"], action["coalSource1"]
             )
-            message[
-                "text"
-            ] += f"{player.name} built railroad: {action['road1'].towns[0].name} -- {action['road1'].towns[1].name}"
+            message["text"] += (
+                f"{player.name} built railroad: {action['road1'].towns[0].name} -- {action['road1'].towns[1].name}"
+            )
         elif (
             action["type"] == ActionTypes.PlaceSecondRoad
             and "card" in action
@@ -195,9 +194,9 @@ class Game:
                 action["coalSources"],
                 action["ironSources"],
             )
-            message[
-                "text"
-            ] += f"{player.name} built {action['building'].name.value} ({action['building'].getTier()}) in {action['buildLocation'].town.name}"
+            message["text"] += (
+                f"{player.name} built {action['building'].name.value} ({action['building'].getTier()}) in {action['buildLocation'].town.name}"
+            )
         elif (
             action["type"] == ActionTypes.PlaceCanal
             and "road" in action
@@ -207,15 +206,14 @@ class Game:
                 roadLocation=action["road"],
                 discard=action["card"],
             )
-            message[
-                "text"
-            ] += f"{player.name} built canal: {action['road'].towns[0].name} -- {action['road'].towns[1].name}"
+            message["text"] += (
+                f"{player.name} built canal: {action['road'].towns[0].name} -- {action['road'].towns[1].name}"
+            )
         elif (
             action["type"] == ActionTypes.DevelopOneIndustry
             and "card" in action
             and "industry1" in action
         ):
-
             initialTier = action["industry1"].getTier()
             player.developOneIndustry(
                 action["industry1"],
@@ -223,9 +221,9 @@ class Game:
                 action["ironSources"],
             )
 
-            message[
-                "text"
-            ] += f'{player.name} developed {action["industry1"].name.value}: {initialTier} --> {action["industry1"].getTier()}'
+            message["text"] += (
+                f'{player.name} developed {action["industry1"].name.value}: {initialTier} --> {action["industry1"].getTier()}'
+            )
 
         elif (
             action["type"] == ActionTypes.DevelopTwoIndustries
@@ -335,12 +333,16 @@ class Game:
             print("Error: no active player")
             return None
 
+    # generate valid actions for the player
+    def generate_valid_actions(self):
+        player: Player = self.get_active_player()
+        return player.get_valid_actions()
+
     # return num actions available to the player right now
     def get_num_actions(self):
         return 1 if self.first_round else 2
 
     def save_current_state(self):
-
         state = {}
 
         state["player_has_to_liquidate"] = self.player_has_to_liquidate
@@ -423,7 +425,6 @@ class Game:
         self.action_history[(self.turn, player_id)].append(action)
 
     def restore_state(self, state):
-
         state = copy.deepcopy(state)  # prevent state being changed
 
         self.players_to_discard = state["players_to_discard"]

@@ -89,6 +89,8 @@ class Player:
 
         self.currentTowns: Set[Town] = set()
 
+        self.validActions = []
+
     def initIndustryMat(self):
         for building in self.buildings:
             self.industryMat[building.name].append(building)
@@ -117,7 +119,6 @@ class Player:
         self.spentThisTurn += amount
 
     def incomeLevel(self, income=None):
-
         incomePoints = self.income if income is None else income
 
         if incomePoints <= 10:
@@ -150,7 +151,11 @@ class Player:
                 self.income -= (
                     4
                     if self.income % 4 == 1
-                    else 5 if self.income % 4 == 2 else 6 if self.income % 4 == 3 else 7
+                    else 5
+                    if self.income % 4 == 2
+                    else 6
+                    if self.income % 4 == 3
+                    else 7
                 )
             else:
                 self.income = 93
@@ -199,7 +204,6 @@ class Player:
     def canAffordBuilding(
         self, building: Building, buildLocation: BuildLocation
     ) -> bool:
-
         ironCost = 0
         coalCost = 0
 
@@ -388,7 +392,6 @@ class Player:
         )
 
     def canAffordSellBuilding(self, building: MarketBuilding) -> bool:
-
         return building.beerCost <= self.board.getAvailableBeerAmount(
             self, building.town
         )
@@ -426,7 +429,6 @@ class Player:
     def canBuildBuilding(
         self, building: Building, buildLocation: BuildLocation
     ) -> bool:
-
         if self.board.era == Era.canal:
             # You may have a maximum of 1 Industry tile per location in Canal era
             for buildLocation_ in buildLocation.town.buildLocations:
@@ -534,7 +536,6 @@ class Player:
         return True
 
     def liquidate(self, debt):
-
         sortedBuildings = sorted(self.currentBuildings, key=lambda x: x.cost)
 
         total_money = 0
@@ -608,7 +609,6 @@ class Player:
     def getAvailableBeerSources(
         self, building: MarketBuilding, test=False
     ) -> Tuple[Set[Merchant], Set[IndustryBuilding | Merchant], int]:
-
         # print("Getting available beer sources for", building)
 
         # Breweries with available beer that can be used
@@ -625,7 +625,7 @@ class Player:
             if (
                 isinstance(b, IndustryBuilding)
                 and b.isBeerBuilding()
-                and not b in beers
+                and b not in beers
             ):
                 beers.add(b)
                 beerFromBreweries += b.resourceAmount
@@ -655,7 +655,7 @@ class Player:
                         bl.building
                         and isinstance(bl.building, IndustryBuilding)
                         and bl.building.isBeerBuilding()
-                        and not bl.building in beers
+                        and bl.building not in beers
                     ):
                         beers.add(bl.building)
                         beerFromBreweries += bl.building.resourceAmount
@@ -720,7 +720,6 @@ class Player:
         # First network verification.
         # If no networks or builddings built can build a road anywhere
         if len(self.currentNetworks) == 0 and len(self.currentBuildings) == 0:
-
             for rLocation in self.board.roadLocations:
                 if (
                     rLocation.isBuilt == True
@@ -768,7 +767,6 @@ class Player:
 
     # Based on Location Cards, Industry Cards, Available Builds from the mat
     def getAvailableLocationCardBuilds(self, card: LocationCard):
-
         # set of tuples (building, buildLocation) indicating possible  builds
         builds = set()
 
@@ -794,7 +792,6 @@ class Player:
 
     # Based on Location Cards, Industry Cards, Available Builds from the mat
     def getAvailableIndustryCardBuilds(self, card: IndustryCard):
-
         # set of tuples (building, buildLocation) indicating possible  builds
         builds = set()
 
@@ -946,7 +943,6 @@ class Player:
         coalSources: List[IndustryBuilding | TradePost] = [],
         ironSources: List[IndustryBuilding] = [],
     ):
-
         assert len(self.industryMat[industryName]) > 0
 
         building: Building = self.industryMat[industryName][-1]
@@ -985,7 +981,6 @@ class Player:
                     coalCost += self.board.consumeCoal(coalSource, 1)
 
         if building.ironCost:
-
             if len(ironSources) == 0:
                 ironCost += self.board.priceForIron(building.ironCost)
                 self.board.ironMarketRemaining = max(
@@ -1198,7 +1193,6 @@ class Player:
         ],
         freeDevelop: List[BuildingName] = [],
     ):
-
         assert self.isCardInHand(discard)
         assert len(forSale) > 0
         for building, beerSources, merchant in forSale:
