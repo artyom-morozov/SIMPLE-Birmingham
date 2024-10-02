@@ -7,8 +7,8 @@ import torch
 from unittest.mock import MagicMock
 
 # Import the action heads module and the game environment
-from action_heads_module_brass import ActionHead
-from env_wrapper import EnvWrapper
+from RL.models.brass_heads_module import ActionHead
+from RL.wrapper import EnvWrapper
 from classes.enums import ActionTypes
 
 class TestActionTypeHead(unittest.TestCase):
@@ -39,10 +39,12 @@ class TestActionTypeHead(unittest.TestCase):
         action = distribution.sample()
 
         # Check that the action is within valid range
+        print("Action", action.item())
         self.assertTrue(action.item() in range(8), "Selected action type is invalid.")
 
         # Optionally, check probabilities
         probs = distribution.probs.detach().numpy()
+        print("Probs", probs)
         self.assertTrue((probs >= 0).all() and (probs <= 1).all(), "Probabilities are not valid.")
     
     async def call(self, board: Board):
