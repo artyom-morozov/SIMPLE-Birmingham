@@ -1,5 +1,5 @@
 # Todo
-
+https://chatgpt.com/share/6718e997-0018-8013-b65f-4069f6adc16b
  * Finish programming rules of the game
     * player discard for actions
         * check for card on build
