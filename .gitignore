@@ -118,3 +118,4 @@ venv.bak/
 # PyCharm / IDEA
 .idea/
 
+*_env/
